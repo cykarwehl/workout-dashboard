@@ -3,27 +3,111 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#F8F7FF">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="My Workout Dashboard">
 <title>My Workout Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css">
+<style>
+  :root {
+    --bg: #F8F7FF;
+    --surface: #FFFFFF;
+    --surface2: #EEF1F8;
+    --accent: #4A6FA5;
+    --accent2: #7B9DD4;
+    --accent-light: #DBE6F5;
+    --text: #1E2D4A;
+    --muted: #8A95A8;
+    --border: rgba(74,111,165,0.12);
+    --border2: rgba(74,111,165,0.2);
+    --fresh: #4A6FA5;
+    --aging: #C9923A;
+    --plateau: #C97A6A;
+    --success: #4A9B7F;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); font-family: 'Nunito', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  .topbar { position: sticky; top: 0; z-index: 100; background: rgba(248,247,255,0.92); backdrop-filter: blur(20px); padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .topbar h1 { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 600; letter-spacing: 0.5px; color: var(--accent); }
+  .topbar p { font-size: 13px; color: var(--muted); letter-spacing: 0.3px; margin-top: 1px; }
+
+  main { padding: 16px 20px 100px; }
+
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(74,111,165,0.06); }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+  .section-badge { font-size: 12px; color: var(--accent); background: var(--accent-light); padding: 4px 12px; border-radius: 20px; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 600; }
+  .kpi-val { font-family: 'Cormorant Garamond', serif; font-size: 42px; font-weight: 600; line-height: 1; color: var(--accent); }
+  .kpi-sub { font-size: 13px; color: var(--success); margin-top: 6px; font-weight: 500; }
+
+  .chart-wrap { position: relative; height: 180px; }
+  .chart-wrap-sm { position: relative; height: 140px; }
+
+  .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .styled-select { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: 'Nunito', sans-serif; font-size: 15px; padding: 11px 14px; appearance: none; -webkit-appearance: none; cursor: pointer; }
+
+  .pill-row { display: flex; gap: 6px; margin-bottom: 14px; }
+  .pill { flex: 1; text-align: center; padding: 7px 0; border-radius: 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+  .pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .pr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .pr-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; padding: 0 10px 12px; text-align: center; }
+  .pr-table th:first-child { text-align: left; padding-left: 0; }
+  .pr-table td { padding: 10px 8px; text-align: center; border-top: 1px solid var(--border); vertical-align: top; }
+  .pr-table td:first-child { text-align: left; padding-left: 0; font-weight: 600; font-size: 14px; color: var(--text); }
+  .pr-weight { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600; color: var(--accent); line-height: 1.1; }
+  .pr-date { font-size: 12px; margin-top: 3px; font-weight: 500; }
+  .pr-empty { color: var(--muted); font-size: 16px; }
+  .date-fresh { color: var(--fresh); }
+  .date-aging { color: var(--aging); }
+  .date-plateau { color: var(--plateau); }
+
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(248,247,255,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 10px 0 20px; z-index: 100; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; transition: color 0.2s; }
+  .nav-item.active { color: var(--accent); }
+  .nav-icon { font-size: 24px; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; color: var(--muted); gap: 14px; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .month-bars { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding-top: 20px; }
+  .month-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .month-bar { width: 100%; background: var(--accent-light); border-radius: 4px 4px 0 0; position: relative; min-height: 4px; transition: height 0.6s ease; }
+  .month-bar.current { background: linear-gradient(180deg, var(--accent2), var(--accent)); }
+  .month-bar-val { position: absolute; top: -18px; width: 100%; text-align: center; font-size: 12px; color: var(--accent); font-weight: 700; }
+  .month-label { font-size: 11px; color: var(--muted); text-align: center; font-weight: 600; }
+
+  .legend-row { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+  .legend-item { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; font-weight: 500; }
+  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
 </head>
 <body>
 
 <div class="topbar">
   <h1>My Workout Dashboard</h1>
-  <p id="last-sync">Loading data...</p>
+  <p id="last-sync">Loading...</p>
 </div>
 
 <div id="app">
   <div class="loading">
     <div class="spinner"></div>
-    <span>Fetching your workouts...</span>
+    <span style="font-size:13px;">Fetching your workouts...</span>
   </div>
 </div>
 
@@ -40,13 +124,338 @@
     <span class="nav-icon">🏆</span>
     <span>PRs</span>
   </div>
-  <div class="nav-item" onclick="showPage('history')">
-    <span class="nav-icon">📋</span>
-    <span>History</span>
-  </div>
 </nav>
 
-<script src="templates.js"></script>
-<script src="app.js"></script>
+<script>
+const SHEET_ID = '1l3J7Jedab0h9viwceYc8TQYp1yhylvOIkT_-Q_-L4pw';
+const API_KEY = 'AIzaSyALt9PbCeLs6Iqw8tfrL6GddCG5pUAIWH4';
+const RANGE = 'Sheet1!A:G';
+
+let allData = [];
+let currentPage = 'overview';
+let weightChart = null;
+let volumeChart = null;
+let selectedRange = 3;
+
+async function fetchData() {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} — check your sheet is public and API key is valid`);
+  const json = await res.json();
+  return json.values || [];
+}
+
+function parseRows(rows) {
+  if (rows.length < 2) return [];
+  return rows.slice(1).map(row => ({
+    date: row[0] || '',
+    machine: (row[1] || '').replace('EGYM ', ''),
+    sets: parseInt(row[2]) || 0,
+    reps: parseInt(row[3]) || 0,
+    weight: parseFloat(row[4]) || 0,
+    mode: row[5] || '',
+    file: row[6] || ''
+  })).filter(r => r.machine && r.date && r.weight > 0);
+}
+
+function parseDate(d) {
+  const dt = new Date(d);
+  return isNaN(dt) ? null : dt;
+}
+
+function formatDate(d) {
+  const dt = parseDate(d);
+  if (!dt) return d;
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatDateShort(d) {
+  const dt = parseDate(d);
+  if (!dt) return d;
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function daysSince(d) {
+  const dt = parseDate(d);
+  if (!dt) return 999;
+  return Math.floor((Date.now() - dt.getTime()) / 86400000);
+}
+
+function dateClass(d) {
+  const days = daysSince(d);
+  if (days < 14) return 'date-fresh';
+  if (days < 28) return 'date-aging';
+  return 'date-plateau';
+}
+
+function getUniqueDates(data) {
+  return [...new Set(data.map(r => r.date))].sort();
+}
+
+function computePRs(data) {
+  const bests = {};
+  const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
+  sorted.forEach(r => {
+    const key = `${r.machine}|${r.mode}`;
+    const prev = bests[key];
+    if (!prev || r.weight > prev.weight) {
+      bests[key] = { weight: r.weight, date: r.date, machine: r.machine, mode: r.mode };
+    }
+  });
+  return bests;
+}
+
+function filterByRange(data, months) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return data.filter(r => { const dt = parseDate(r.date); return dt && dt >= cutoff; });
+}
+
+function buildOverview(data) {
+  const dates = getUniqueDates(data);
+  const machines = [...new Set(data.map(r => r.machine))].length;
+
+  const monthMap = {};
+  dates.forEach(d => {
+    const dt = parseDate(d);
+    if (!dt) return;
+    const key = dt.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+    monthMap[key] = (monthMap[key] || 0) + 1;
+  });
+  const monthEntries = Object.entries(monthMap).slice(-6);
+  const maxVisits = Math.max(...monthEntries.map(e => e[1]), 1);
+  const nowKey = new Date().toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+
+  return `
+  <div class="page active fade-in" id="page-overview">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Total workouts</div>
+        <div class="kpi-val">${dates.length}</div>
+        <div class="kpi-sub">sessions logged</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Machines trained</div>
+        <div class="kpi-val">${machines}</div>
+        <div class="kpi-sub">unique machines</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Gym visits per month</span>
+        <span class="section-badge">last 6 months</span>
+      </div>
+      <div class="month-bars">
+        ${monthEntries.map(([label, count]) => `
+          <div class="month-col">
+            <div class="month-bar ${label === nowKey ? 'current' : ''}" style="height:${Math.round(count/maxVisits*80)}px">
+              <span class="month-bar-val">${count}</span>
+            </div>
+            <div class="month-label">${label.split(' ')[0]}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildProgress(data) {
+  const machines = [...new Set(data.map(r => r.machine))].sort();
+  const firstMachine = machines[0] || '';
+  const modes = [...new Set(data.filter(r => r.machine === firstMachine).map(r => r.mode))].filter(Boolean).sort();
+  return `
+  <div class="page fade-in" id="page-progress">
+    <div class="filter-row">
+      <select class="styled-select" id="machine-select" onchange="onMachineChange()">
+        ${machines.map(m => `<option value="${m}">${m}</option>`).join('')}
+      </select>
+      <select class="styled-select" id="mode-select" onchange="updateCharts()">
+        <option value="all">All modes</option>
+        ${modes.map(m => `<option value="${m}">${m}</option>`).join('')}
+      </select>
+    </div>
+    <div class="pill-row">
+      <button class="pill" onclick="setRange(1,this)">1M</button>
+      <button class="pill active" onclick="setRange(3,this)">3M</button>
+      <button class="pill" onclick="setRange(6,this)">6M</button>
+      <button class="pill" onclick="setRange(12,this)">12M</button>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Weight over time</span>
+        <span class="section-badge" id="weight-pr-badge"></span>
+      </div>
+      <div class="legend-row" id="weight-legend"></div>
+      <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Volume over time</span>
+        <span class="section-badge">sets × reps × kg</span>
+      </div>
+      <div class="legend-row" id="volume-legend"></div>
+      <div class="chart-wrap-sm"><canvas id="volumeChart"></canvas></div>
+    </div>
+  </div>`;
+}
+
+const MODE_COLORS = [
+  { line: '#4A6FA5', bar: 'rgba(74,111,165,0.7)' },
+  { line: '#7B9DD4', bar: 'rgba(123,157,212,0.7)' },
+  { line: '#4A9B7F', bar: 'rgba(74,155,127,0.7)' },
+  { line: '#C9923A', bar: 'rgba(201,146,58,0.7)' },
+];
+
+function onMachineChange() {
+  const machine = document.getElementById('machine-select')?.value;
+  const modeSelect = document.getElementById('mode-select');
+  if (!machine || !modeSelect) return;
+  const modes = [...new Set(allData.filter(r => r.machine === machine).map(r => r.mode))].filter(Boolean).sort();
+  modeSelect.innerHTML = `<option value="all">All modes</option>` + modes.map(m => `<option value="${m}">${m}</option>`).join('');
+  updateCharts();
+}
+
+function setRange(months, btn) {
+  selectedRange = months;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  updateCharts();
+}
+
+function updateCharts() {
+  const machine = document.getElementById('machine-select')?.value;
+  const selectedMode = document.getElementById('mode-select')?.value || 'all';
+  if (!machine) return;
+
+  const machineData = allData.filter(r => r.machine === machine);
+  const rangeData = filterByRange(machineData, selectedRange);
+  const modes = selectedMode === 'all'
+    ? [...new Set(rangeData.map(r => r.mode))].filter(Boolean).sort()
+    : [selectedMode];
+
+  const allDates = [...new Set(rangeData.map(r => r.date))].sort();
+  const labels = allDates.map(d => formatDateShort(d));
+
+  const weightDatasets = modes.map((mode, i) => {
+    const color = MODE_COLORS[i % MODE_COLORS.length];
+    const modeRows = rangeData.filter(r => r.mode === mode).sort((a,b) => new Date(a.date)-new Date(b.date));
+    const data = allDates.map(d => { const row = modeRows.find(r => r.date === d); return row ? row.weight : null; });
+    const maxW = modeRows.length ? Math.max(...modeRows.map(r => r.weight)) : 0;
+    return { label: mode, data, borderColor: color.line, backgroundColor: color.line+'15', borderWidth: 2, fill: modes.length===1, tension: 0.3, spanGaps: true, pointBackgroundColor: data.map(w => w===maxW ? color.line : '#fff'), pointBorderColor: color.line, pointRadius: 4, pointHoverRadius: 6, _maxW: maxW };
+  });
+
+  const volumeDatasets = modes.map((mode, i) => {
+    const color = MODE_COLORS[i % MODE_COLORS.length];
+    const modeRows = rangeData.filter(r => r.mode === mode);
+    const data = allDates.map(d => { const row = modeRows.find(r => r.date === d); return row ? row.sets*row.reps*row.weight : null; });
+    return { label: mode, data, backgroundColor: color.bar, borderRadius: 4, borderSkipped: false };
+  });
+
+  const badge = document.getElementById('weight-pr-badge');
+  if (badge) {
+    if (modes.length === 1 && weightDatasets[0]) badge.textContent = `PR: ${weightDatasets[0]._maxW} kg`;
+    else { const ov = machineData.length ? Math.max(...machineData.map(r=>r.weight)) : 0; badge.textContent = `Overall PR: ${ov} kg`; }
+  }
+
+  const legendHtml = modes.length > 1 ? modes.map((mode,i) => {
+    const color = MODE_COLORS[i%MODE_COLORS.length];
+    return `<div class="legend-item"><span class="legend-dot" style="background:${color.line}"></span>${mode}</div>`;
+  }).join('') : '';
+  const wl = document.getElementById('weight-legend'); if(wl) wl.innerHTML = legendHtml;
+  const vl = document.getElementById('volume-legend'); if(vl) vl.innerHTML = legendHtml;
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { backgroundColor:'#fff', borderColor:'rgba(74,111,165,0.2)', borderWidth:1, titleColor:'#8A95A8', bodyColor:'#1E2D4A', padding:10 } },
+    scales: {
+      x: { ticks: { color:'#8A95A8', font:{size:10}, maxRotation:45 }, grid: { color:'rgba(74,111,165,0.06)' } },
+      y: { ticks: { color:'#8A95A8', font:{size:10} }, grid: { color:'rgba(74,111,165,0.06)' } }
+    }
+  };
+
+  const wCtx = document.getElementById('weightChart');
+  if (wCtx) {
+    if (weightChart) weightChart.destroy();
+    weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} kg`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>v+' kg'}}} } });
+  }
+
+  const vCtx = document.getElementById('volumeChart');
+  if (vCtx) {
+    if (volumeChart) volumeChart.destroy();
+    volumeChart = new Chart(vCtx, { type:'bar', data:{ labels, datasets:volumeDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>Math.round(v)}}} } });
+  }
+}
+
+function buildPRs(data) {
+  const bests = computePRs(data);
+  const machines = [...new Set(data.map(r => r.machine))].sort();
+  const modes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+
+  const headerCells = modes.map(m => `<th>${m}</th>`).join('');
+  const rows = machines.map(machine => {
+    const cells = modes.map(mode => {
+      const key = `${machine}|${mode}`;
+      const pr = bests[key];
+      if (!pr) return `<td><span class="pr-empty">—</span></td>`;
+      return `<td><div class="pr-weight">${pr.weight} kg</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
+    }).join('');
+    return `<tr><td>${machine}</td>${cells}</tr>`;
+  }).join('');
+
+  return `
+  <div class="page fade-in" id="page-prs">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Personal records</span>
+        <span class="section-badge">per machine · per mode</span>
+      </div>
+      <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--fresh);display:inline-block"></span>&lt; 2 weeks</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--aging);display:inline-block"></span>2–4 weeks</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--plateau);display:inline-block"></span>&gt; 4 weeks</div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="pr-table">
+          <thead><tr><th>Machine</th>${headerCells}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach((el,i) => {
+    el.classList.toggle('active', ['overview','progress','prs'][i] === page);
+  });
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`page-${page}`);
+  if (target) {
+    target.classList.add('active');
+    if (page === 'progress') setTimeout(updateCharts, 50);
+  }
+}
+
+async function init() {
+  try {
+    const rows = await fetchData();
+    allData = parseRows(rows);
+    const dates = getUniqueDates(allData);
+    const lastDate = dates[dates.length-1] || '';
+    document.getElementById('last-sync').textContent = `Last session: ${formatDate(lastDate)}`;
+    document.getElementById('app').innerHTML = `<main>${buildOverview(allData)}${buildProgress(allData)}${buildPRs(allData)}</main>`;
+    showPage('overview');
+  } catch(e) {
+    document.getElementById('app').innerHTML = `
+      <div class="loading">
+        <span style="font-size:22px;color:var(--plateau);">⚠</span>
+        <span style="font-size:13px;color:var(--text);font-weight:500;">Could not load data</span>
+        <span style="font-size:12px;color:var(--muted);text-align:center;max-width:280px;">${e.message}</span>
+      </div>`;
+  }
+}
+
+init();
+</script>
 </body>
 </html>
