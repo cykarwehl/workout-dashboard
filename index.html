@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Workout Dashboard">
+<title>My Workout Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c26;
+    --accent: #ff5c00;
+    --accent2: #ff8c42;
+    --text: #f0f0f0;
+    --muted: #666680;
+    --border: rgba(255,255,255,0.06);
+    --success: #00e5a0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  /* NAV */
+  .topbar { position: sticky; top: 0; z-index: 100; background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 2px; background: linear-gradient(90deg, #fff, var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .topbar p { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 1px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 6px; padding: 14px 20px 0; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex-shrink: 0; padding: 7px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* MAIN */
+  main { padding: 16px 20px 100px; }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 12px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .kpi-val { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 1px; line-height: 1; color: var(--text); }
+  .kpi-sub { font-size: 10px; color: var(--success); margin-top: 4px; }
+
+  /* SECTION */
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 500; }
+  .section-badge { font-size: 10px; color: var(--accent); background: rgba(255,92,0,0.12); padding: 3px 10px; border-radius: 20px; }
+
+  /* CHART */
+  .chart-wrap { position: relative; height: 180px; }
+
+  /* MACHINE SELECT */
+  .machine-select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 14px; margin-bottom: 14px; appearance: none; -webkit-appearance: none; cursor: pointer; }
+
+  /* PR LIST */
+  .pr-list { display: flex; flex-direction: column; gap: 8px; }
+  .pr-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface2); border-radius: 10px; padding: 11px 14px; border: 1px solid var(--border); }
+  .pr-item.highlight { border-color: rgba(255,92,0,0.3); background: rgba(255,92,0,0.06); }
+  .pr-machine { font-size: 13px; font-weight: 500; }
+  .pr-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pr-weight { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; color: var(--accent); }
+  .trophy { font-size: 14px; margin-right: 6px; }
+
+  /* HISTORY TABLE */
+  .history-list { display: flex; flex-direction: column; gap: 6px; }
+  .history-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .history-item:last-child { border-bottom: none; }
+  .history-left { font-size: 12px; }
+  .history-machine { font-weight: 500; color: var(--text); }
+  .history-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .history-right { text-align: right; }
+  .history-weight { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--text); letter-spacing: 0.5px; }
+  .pr-badge { font-size: 9px; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
+
+  /* LOADING */
+  .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--muted); gap: 14px; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* BOTTOM NAV */
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10,10,15,0.92); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 10px 0 20px; z-index: 100; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); font-size: 10px; letter-spacing: 0.5px; transition: color 0.2s; }
+  .nav-item.active { color: var(--accent); }
+  .nav-icon { font-size: 20px; }
+
+  /* PAGE VISIBILITY */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 13px; }
+
+  /* VOLUME BAR */
+  .vol-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .vol-label { font-size: 11px; color: var(--muted); width: 100px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vol-track { flex: 1; background: var(--surface2); border-radius: 4px; height: 7px; }
+  .vol-fill { height: 7px; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.6s ease; }
+  .vol-val { font-size: 11px; color: var(--text); width: 60px; text-align: right; flex-shrink: 0; }
+
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>My Workout Dashboard</h1>
+  <p id="last-sync">Loading data...</p>
+</div>
+
+<div id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <span>Fetching your workouts...</span>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-item active" onclick="showPage('overview')">
+    <span class="nav-icon">⚡</span>
+    <span>Overview</span>
+  </div>
+  <div class="nav-item" onclick="showPage('progress')">
+    <span class="nav-icon">📈</span>
+    <span>Progress</span>
+  </div>
+  <div class="nav-item" onclick="showPage('prs')">
+    <span class="nav-icon">🏆</span>
+    <span>PRs</span>
+  </div>
+  <div class="nav-item" onclick="showPage('history')">
+    <span class="nav-icon">📋</span>
+    <span>History</span>
+  </div>
+</nav>
+
+<script>
+const SHEET_ID = '1l3J7Jedab0h9viwceYc8TQYp1yhylvOIkT_-Q_-L4pw';
+const API_KEY = 'AIzaSyALt9PbCeLs6Iqw8tfrL6GddCG5pUAIWH4';
+const RANGE = 'Sheet1!A:G';
+
+let allData = [];
+let currentPage = 'overview';
+let progressChart = null;
+
+async function fetchData() {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch sheet data');
+  const json = await res.json();
+  return json.values || [];
+}
+
+function parseRows(rows) {
+  if (rows.length < 2) return [];
+  const headers = rows[0];
+  return rows.slice(1).map(row => ({
+    date: row[0] || '',
+    machine: row[1] || '',
+    sets: parseInt(row[2]) || 0,
+    reps: parseInt(row[3]) || 0,
+    weight: parseFloat(row[4]) || 0,
+    mode: row[5] || '',
+    file: row[6] || ''
+  })).filter(r => r.machine && r.date);
+}
+
+function computePRs(data) {
+  const bests = {};
+  const prRows = [];
+  const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
+  sorted.forEach(row => {
+    const prev = bests[row.machine] || 0;
+    if (row.weight > prev) {
+      bests[row.machine] = row.weight;
+      prRows.push({ ...row, isPR: true });
+    }
+  });
+  return { bests, prRows };
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt)) return d;
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function getUniqueDates(data) {
+  return [...new Set(data.map(r => r.date))].sort();
+}
+
+function getTotalVolume(data) {
+  return data.reduce((s, r) => s + r.sets * r.reps * r.weight, 0);
+}
+
+function buildOverview(data) {
+  const { bests, prRows } = computePRs(data);
+  const dates = getUniqueDates(data);
+  const totalWorkouts = dates.length;
+  const totalPRs = prRows.length;
+  const lastDate = dates[dates.length - 1] || '-';
+
+  // Volume per machine
+  const volByMachine = {};
+  data.forEach(r => { volByMachine[r.machine] = (volByMachine[r.machine] || 0) + r.sets * r.reps * r.weight; });
+  const sortedMachines = Object.entries(volByMachine).sort((a, b) => b[1] - a[1]);
+  const maxVol = sortedMachines[0]?.[1] || 1;
+
+  return `
+  <div class="page active fade-in" id="page-overview">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Workouts</div>
+        <div class="kpi-val">${totalWorkouts}</div>
+        <div class="kpi-sub">sessions</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">PRs Set</div>
+        <div class="kpi-val">${totalPRs}</div>
+        <div class="kpi-sub">all time</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Last Session</div>
+        <div class="kpi-val" style="font-size:18px; padding-top:4px;">${formatDate(lastDate)}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Volume by machine</span>
+        <span class="section-badge">sets × reps × kg</span>
+      </div>
+      ${sortedMachines.map(([machine, vol]) => `
+        <div class="vol-bar-row">
+          <span class="vol-label">${machine.replace('EGYM ', '')}</span>
+          <div class="vol-track"><div class="vol-fill" style="width:${Math.round(vol/maxVol*100)}%"></div></div>
+          <span class="vol-val">${Math.round(vol).toLocaleString()}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Top PRs</span>
+      </div>
+      <div class="pr-list">
+        ${Object.entries(bests).sort((a,b) => b[1]-a[1]).slice(0,5).map(([machine, weight]) => {
+          const prRow = prRows.filter(r => r.machine === machine).pop();
+          return `
+          <div class="pr-item highlight">
+            <div>
+              <div class="pr-machine">${machine.replace('EGYM ', '')}</div>
+              <div class="pr-date">${formatDate(prRow?.date)}</div>
+            </div>
+            <div class="pr-weight">${weight} kg</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildProgress(data) {
+  const machines = [...new Set(data.map(r => r.machine))].sort();
+  return `
+  <div class="page fade-in" id="page-progress">
+    <select class="machine-select" id="machine-select" onchange="updateProgressChart()">
+      ${machines.map(m => `<option value="${m}">${m.replace('EGYM ', '')}</option>`).join('')}
+    </select>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Weight over time</span>
+        <span class="section-badge" id="chart-pr-badge"></span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="progressChart"></canvas>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header"><span class="section-title">Session log</span></div>
+      <div class="history-list" id="machine-log"></div>
+    </div>
+  </div>`;
+}
+
+function updateProgressChart() {
+  const machine = document.getElementById('machine-select')?.value;
+  if (!machine) return;
+
+  const rows = allData.filter(r => r.machine === machine).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const labels = rows.map(r => formatDate(r.date));
+  const weights = rows.map(r => r.weight);
+  const maxW = Math.max(...weights);
+
+  const badge = document.getElementById('chart-pr-badge');
+  if (badge) badge.textContent = `PR: ${maxW} kg`;
+
+  const ctx = document.getElementById('progressChart');
+  if (!ctx) return;
+
+  if (progressChart) progressChart.destroy();
+
+  progressChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: weights,
+        borderColor: '#ff5c00',
+        backgroundColor: 'rgba(255,92,0,0.08)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: weights.map(w => w === maxW ? '#ff5c00' : '#1c1c26'),
+        pointBorderColor: '#ff5c00',
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#1c1c26',
+        borderColor: 'rgba(255,92,0,0.3)',
+        borderWidth: 1,
+        titleColor: '#666680',
+        bodyColor: '#f0f0f0',
+        callbacks: { label: ctx => `${ctx.parsed.y} kg` }
+      }},
+      scales: {
+        x: { ticks: { color: '#666680', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#666680', font: { size: 10 }, callback: v => v + ' kg' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
+    }
+  });
+
+  // Machine log
+  const log = document.getElementById('machine-log');
+  if (log) {
+    log.innerHTML = [...rows].reverse().map(r => `
+      <div class="history-item">
+        <div class="history-left">
+          <div class="history-machine">${formatDate(r.date)}</div>
+          <div class="history-meta">${r.sets} sets × ${r.reps} reps · ${r.mode}</div>
+        </div>
+        <div class="history-right">
+          <div class="history-weight">${r.weight} kg${r.weight === maxW ? '<span class="pr-badge">PR</span>' : ''}</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function buildPRs(data) {
+  const { prRows } = computePRs(data);
+  const sorted = [...prRows].sort((a, b) => b.weight - a.weight);
+  return `
+  <div class="page fade-in" id="page-prs">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">All-time personal records</span>
+        <span class="section-badge">${sorted.length} PRs</span>
+      </div>
+      <div class="pr-list">
+        ${sorted.map((r, i) => `
+        <div class="pr-item ${i < 3 ? 'highlight' : ''}">
+          <div>
+            <div class="pr-machine">${i < 3 ? '🏆 ' : ''}${r.machine.replace('EGYM ', '')}</div>
+            <div class="pr-date">${formatDate(r.date)} · ${r.sets}×${r.reps}</div>
+          </div>
+          <div class="pr-weight">${r.weight} kg</div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildHistory(data) {
+  const sorted = [...data].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const { bests } = computePRs(data);
+  return `
+  <div class="page fade-in" id="page-history">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">All sessions</span>
+        <span class="section-badge">${sorted.length} entries</span>
+      </div>
+      <div class="history-list">
+        ${sorted.map(r => `
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-machine">${r.machine.replace('EGYM ', '')}${r.weight === bests[r.machine] ? '<span class="pr-badge">PR</span>' : ''}</div>
+            <div class="history-meta">${formatDate(r.date)} · ${r.sets}×${r.reps} · ${r.mode}</div>
+          </div>
+          <div class="history-right">
+            <div class="history-weight">${r.weight} kg</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function showPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    el.classList.toggle('active', ['overview','progress','prs','history'][i] === page);
+  });
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`page-${page}`);
+  if (target) {
+    target.classList.add('active');
+    if (page === 'progress') setTimeout(updateProgressChart, 50);
+  }
+}
+
+async function init() {
+  try {
+    const rows = await fetchData();
+    allData = parseRows(rows);
+
+    const lastDate = getUniqueDates(allData).pop() || '';
+    document.getElementById('last-sync').textContent = `Last session: ${formatDate(lastDate)}`;
+
+    document.getElementById('app').innerHTML = `
+      <main>
+        ${buildOverview(allData)}
+        ${buildProgress(allData)}
+        ${buildPRs(allData)}
+        ${buildHistory(allData)}
+      </main>`;
+
+    showPage('overview');
+  } catch (e) {
+    document.getElementById('app').innerHTML = `
+      <div class="loading">
+        <span style="color:#ff5c00">⚠️ Error loading data</span>
+        <span style="font-size:12px">${e.message}</span>
+      </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
