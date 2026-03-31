@@ -1,31 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#E87A2A"/>
 
-  <!-- Dumbbell (upper half, inset for safe zone) -->
+  <!-- Dumbbell (extra inset for maskable safe zone ~10% each side = 51px) -->
   <g fill="#FFFFFF">
     <!-- Left outer plate -->
-    <rect x="56" y="108" width="52" height="100" rx="11"/>
+    <rect x="96" y="126" width="44" height="88" rx="10"/>
     <!-- Left inner collar -->
-    <rect x="108" y="124" width="28" height="68" rx="6"/>
+    <rect x="140" y="141" width="24" height="58" rx="6"/>
     <!-- Bar -->
-    <rect x="136" y="142" width="240" height="30" rx="6"/>
+    <rect x="164" y="156" width="184" height="28" rx="6"/>
     <!-- Right inner collar -->
-    <rect x="376" y="124" width="28" height="68" rx="6"/>
+    <rect x="348" y="141" width="24" height="58" rx="6"/>
     <!-- Right outer plate -->
-    <rect x="404" y="108" width="52" height="100" rx="11"/>
+    <rect x="372" y="126" width="44" height="88" rx="10"/>
   </g>
 
-  <!-- Bar chart (lower half, inset for safe zone) -->
+  <!-- Bar chart (extra inset for maskable safe zone) -->
   <g fill="#FFFFFF">
     <!-- Baseline -->
-    <rect x="68" y="390" width="376" height="13" rx="6"/>
+    <rect x="96" y="372" width="320" height="12" rx="6"/>
     <!-- Bar 1 -->
-    <rect x="92" y="328" width="54" height="62" rx="7"/>
+    <rect x="116" y="316" width="48" height="56" rx="6"/>
     <!-- Bar 2 -->
-    <rect x="180" y="288" width="54" height="102" rx="7"/>
+    <rect x="192" y="280" width="48" height="92" rx="6"/>
     <!-- Bar 3 -->
-    <rect x="268" y="255" width="54" height="135" rx="7"/>
+    <rect x="268" y="252" width="48" height="120" rx="6"/>
     <!-- Bar 4 -->
-    <rect x="356" y="218" width="54" height="172" rx="7"/>
+    <rect x="344" y="222" width="48" height="150" rx="6"/>
   </g>
 </svg>

@@ -1,31 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="80" fill="#E87A2A"/>
 
-  <!-- Dumbbell (upper half) -->
+  <!-- Dumbbell (upper half, padded inward) -->
   <g fill="#FFFFFF">
     <!-- Left outer plate -->
-    <rect x="44" y="100" width="56" height="110" rx="12"/>
+    <rect x="80" y="118" width="48" height="96" rx="11"/>
     <!-- Left inner collar -->
-    <rect x="100" y="118" width="30" height="74" rx="7"/>
+    <rect x="128" y="134" width="26" height="64" rx="6"/>
     <!-- Bar -->
-    <rect x="130" y="138" width="252" height="34" rx="7"/>
+    <rect x="154" y="150" width="204" height="30" rx="6"/>
     <!-- Right inner collar -->
-    <rect x="382" y="118" width="30" height="74" rx="7"/>
+    <rect x="358" y="134" width="26" height="64" rx="6"/>
     <!-- Right outer plate -->
-    <rect x="412" y="100" width="56" height="110" rx="12"/>
+    <rect x="384" y="118" width="48" height="96" rx="11"/>
   </g>
 
-  <!-- Bar chart (lower half) -->
+  <!-- Bar chart (lower half, padded inward) -->
   <g fill="#FFFFFF">
     <!-- Baseline -->
-    <rect x="60" y="390" width="392" height="14" rx="7"/>
-    <!-- Bar 1 (short) -->
-    <rect x="88" y="322" width="58" height="68" rx="8"/>
-    <!-- Bar 2 (medium) -->
-    <rect x="178" y="280" width="58" height="110" rx="8"/>
-    <!-- Bar 3 (tall) -->
-    <rect x="268" y="248" width="58" height="142" rx="8"/>
-    <!-- Bar 4 (tallest) -->
-    <rect x="358" y="210" width="58" height="180" rx="8"/>
+    <rect x="80" y="378" width="352" height="12" rx="6"/>
+    <!-- Bar 1 -->
+    <rect x="104" y="318" width="52" height="60" rx="7"/>
+    <!-- Bar 2 -->
+    <rect x="184" y="282" width="52" height="96" rx="7"/>
+    <!-- Bar 3 -->
+    <rect x="264" y="252" width="52" height="126" rx="7"/>
+    <!-- Bar 4 -->
+    <rect x="344" y="218" width="52" height="160" rx="7"/>
   </g>
 </svg>
