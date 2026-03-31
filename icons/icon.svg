@@ -1,18 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="80" fill="#4A6FA5"/>
-  <!-- Dumbbell icon -->
+  <rect width="512" height="512" rx="80" fill="#E87A2A"/>
+
+  <!-- Dumbbell (upper half) -->
   <g fill="#FFFFFF">
-    <!-- Left plate outer -->
-    <rect x="60" y="220" width="48" height="72" rx="10"/>
-    <!-- Left plate inner -->
-    <rect x="108" y="232" width="28" height="48" rx="6"/>
+    <!-- Left outer plate -->
+    <rect x="44" y="100" width="56" height="110" rx="12"/>
+    <!-- Left inner collar -->
+    <rect x="100" y="118" width="30" height="74" rx="7"/>
     <!-- Bar -->
-    <rect x="136" y="244" width="240" height="24" rx="6"/>
-    <!-- Right plate inner -->
-    <rect x="376" y="232" width="28" height="48" rx="6"/>
-    <!-- Right plate outer -->
-    <rect x="404" y="220" width="48" height="72" rx="10"/>
+    <rect x="130" y="138" width="252" height="34" rx="7"/>
+    <!-- Right inner collar -->
+    <rect x="382" y="118" width="30" height="74" rx="7"/>
+    <!-- Right outer plate -->
+    <rect x="412" y="100" width="56" height="110" rx="12"/>
   </g>
-  <!-- Small upward trend line at bottom -->
-  <polyline points="160,380 220,340 280,355 340,310 380,295" stroke="#DBE6F5" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Bar chart (lower half) -->
+  <g fill="#FFFFFF">
+    <!-- Baseline -->
+    <rect x="60" y="390" width="392" height="14" rx="7"/>
+    <!-- Bar 1 (short) -->
+    <rect x="88" y="322" width="58" height="68" rx="8"/>
+    <!-- Bar 2 (medium) -->
+    <rect x="178" y="280" width="58" height="110" rx="8"/>
+    <!-- Bar 3 (tall) -->
+    <rect x="268" y="248" width="58" height="142" rx="8"/>
+    <!-- Bar 4 (tallest) -->
+    <rect x="358" y="210" width="58" height="180" rx="8"/>
+  </g>
 </svg>

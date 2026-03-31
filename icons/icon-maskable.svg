@@ -1,13 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Solid background (no rounded corners for maskable — OS applies the mask) -->
-  <rect width="512" height="512" fill="#4A6FA5"/>
-  <!-- Dumbbell icon (slightly smaller, centred for safe zone) -->
+  <rect width="512" height="512" fill="#E87A2A"/>
+
+  <!-- Dumbbell (upper half, inset for safe zone) -->
   <g fill="#FFFFFF">
-    <rect x="80" y="226" width="44" height="60" rx="8"/>
-    <rect x="124" y="236" width="26" height="40" rx="5"/>
-    <rect x="150" y="246" width="212" height="20" rx="5"/>
-    <rect x="362" y="236" width="26" height="40" rx="5"/>
-    <rect x="388" y="226" width="44" height="60" rx="8"/>
+    <!-- Left outer plate -->
+    <rect x="56" y="108" width="52" height="100" rx="11"/>
+    <!-- Left inner collar -->
+    <rect x="108" y="124" width="28" height="68" rx="6"/>
+    <!-- Bar -->
+    <rect x="136" y="142" width="240" height="30" rx="6"/>
+    <!-- Right inner collar -->
+    <rect x="376" y="124" width="28" height="68" rx="6"/>
+    <!-- Right outer plate -->
+    <rect x="404" y="108" width="52" height="100" rx="11"/>
   </g>
-  <polyline points="170,375 225,342 280,355 340,318 385,305" stroke="#DBE6F5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Bar chart (lower half, inset for safe zone) -->
+  <g fill="#FFFFFF">
+    <!-- Baseline -->
+    <rect x="68" y="390" width="376" height="13" rx="6"/>
+    <!-- Bar 1 -->
+    <rect x="92" y="328" width="54" height="62" rx="7"/>
+    <!-- Bar 2 -->
+    <rect x="180" y="288" width="54" height="102" rx="7"/>
+    <!-- Bar 3 -->
+    <rect x="268" y="255" width="54" height="135" rx="7"/>
+    <!-- Bar 4 -->
+    <rect x="356" y="218" width="54" height="172" rx="7"/>
+  </g>
 </svg>
