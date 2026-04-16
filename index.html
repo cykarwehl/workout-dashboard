@@ -348,9 +348,9 @@ function buildOverview(data) {
 }
 
 const MACHINE_CATEGORIES = [
-  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps'] },
+  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pulldowns', 'Dumbbell Rows 1 Arm'] },
   { label: 'Core',       machines: ['Abdominal Crunch','Back Extension','Rotary Torso'] },
-  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press'] },
+  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat'] },
 ];
 
 function buildMachineOptions(available) {
@@ -372,12 +372,14 @@ function buildMachineOptions(available) {
 function buildProgress(data) {
   const machines = [...new Set(data.map(r => r.machine))].sort();
   const modes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+  const hasOther = data.some(r => !r.mode);
   return `
   <div class="page fade-in" id="page-progress">
     <div class="filter-row">
       <select class="styled-select" id="mode-select" onchange="updateCharts()">
         <option value="all">All modes</option>
         ${modes.map(m => `<option value="${m}">${m}</option>`).join('')}
+        ${hasOther ? `<option value="__other__">Other</option>` : ''}
       </select>
       <select class="styled-select" id="machine-select" onchange="onMachineChange()">
         ${buildMachineOptions(machines)}
@@ -426,54 +428,55 @@ function setRange(months, btn) {
   updateCharts();
 }
 
-function updateCharts() {
-  const machine = document.getElementById('machine-select')?.value;
-  const selectedMode = document.getElementById('mode-select')?.value || 'all';
-  if (!machine) return;
+const modeFilter = mode => mode === '__other__' ? r => !r.mode : r => r.mode === mode;
+const modeLabel = mode => mode === '__other__' ? 'Other' : mode;
 
-  const machineData = allData.filter(r => r.machine === machine);
-  const rangeData = filterByRange(machineData, selectedRange);
-  const modes = selectedMode === 'all'
-    ? [...new Set(rangeData.map(r => r.mode))].filter(Boolean).sort()
-    : [selectedMode];
-
-  const allDates = [...new Set(rangeData.map(r => r.date))].sort();
-  const labels = allDates.map(d => formatDateShort(d));
-
-  const weightDatasets = modes.map((mode, i) => {
+function buildWeightDatasets(modes, rangeData, allDates) {
+  return modes.map((mode, i) => {
     const color = MODE_COLORS[i % MODE_COLORS.length];
-    const modeRows = rangeData.filter(r => r.mode === mode).sort((a,b) => new Date(a.date)-new Date(b.date));
+    const modeRows = rangeData.filter(modeFilter(mode)).sort((a,b) => new Date(a.date)-new Date(b.date));
     const maxW = modeRows.length ? Math.max(...modeRows.map(r => r.weight)) : 0;
     const data = allDates.map(d => {
       const rows = modeRows.filter(r => r.date === d);
       return rows.length ? Math.max(...rows.map(r => r.weight)) : null;
     });
-    return { label: mode, data, borderColor: color.line, backgroundColor: color.line+'15', borderWidth: 2, fill: modes.length===1, tension: 0.3, spanGaps: true, pointBackgroundColor: data.map(w => w===maxW ? color.line : '#fff'), pointBorderColor: color.line, pointRadius: 4, pointHoverRadius: 6, _maxW: maxW };
+    return { label: modeLabel(mode), data, borderColor: color.line, backgroundColor: color.line+'15', borderWidth: 2, fill: modes.length===1, tension: 0.3, spanGaps: true, pointBackgroundColor: data.map(w => w===maxW ? color.line : '#fff'), pointBorderColor: color.line, pointRadius: 4, pointHoverRadius: 6, _maxW: maxW };
   });
+}
 
-  const volumeDatasets = modes.map((mode, i) => {
+function buildVolumeDatasets(modes, rangeData, allDates) {
+  return modes.map((mode, i) => {
     const color = MODE_COLORS[i % MODE_COLORS.length];
-    const modeRows = rangeData.filter(r => r.mode === mode);
+    const modeRows = rangeData.filter(modeFilter(mode));
     const data = allDates.map(d => {
       const rows = modeRows.filter(r => r.date === d);
       return rows.length ? rows.reduce((sum, r) => sum + r.reps * r.weight, 0) : null;
     });
-    return { label: mode, data, backgroundColor: color.bar, borderRadius: 4, borderSkipped: false };
+    return { label: modeLabel(mode), data, backgroundColor: color.bar, borderRadius: 4, borderSkipped: false };
   });
+}
 
+function updatePRBadge(modes, weightDatasets, machineData) {
   const badge = document.getElementById('weight-pr-badge');
-  if (badge) {
-    if (modes.length === 1 && weightDatasets[0]) badge.textContent = `PR: ${weightDatasets[0]._maxW} kg`;
-    else { const ov = machineData.length ? Math.max(...machineData.map(r=>r.weight)) : 0; badge.textContent = `Overall PR: ${ov} kg`; }
+  if (!badge) return;
+  if (modes.length === 1 && weightDatasets[0]) {
+    badge.textContent = `PR: ${weightDatasets[0]._maxW} kg`;
+  } else {
+    const ov = machineData.length ? Math.max(...machineData.map(r => r.weight)) : 0;
+    badge.textContent = `Overall PR: ${ov} kg`;
   }
+}
 
-  const legendHtml = modes.length > 1 ? modes.map((mode,i) => {
-    const color = MODE_COLORS[i%MODE_COLORS.length];
-    return `<div class="legend-item"><span class="legend-dot" style="background:${color.line}"></span>${mode}</div>`;
+function updateLegend(modes) {
+  const html = modes.length > 1 ? modes.map((mode, i) => {
+    const color = MODE_COLORS[i % MODE_COLORS.length];
+    return `<div class="legend-item"><span class="legend-dot" style="background:${color.line}"></span>${modeLabel(mode)}</div>`;
   }).join('') : '';
-  const wl = document.getElementById('weight-legend'); if(wl) wl.innerHTML = legendHtml;
-  const vl = document.getElementById('volume-legend'); if(vl) vl.innerHTML = legendHtml;
+  const wl = document.getElementById('weight-legend'); if (wl) wl.innerHTML = html;
+  const vl = document.getElementById('volume-legend'); if (vl) vl.innerHTML = html;
+}
 
+function renderCharts(labels, weightDatasets, volumeDatasets) {
   const baseOpts = {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false }, tooltip: { backgroundColor:'#fff', borderColor:'rgba(74,111,165,0.2)', borderWidth:1, titleColor:'#8A95A8', bodyColor:'#1E2D4A', padding:10 } },
@@ -482,13 +485,11 @@ function updateCharts() {
       y: { ticks: { color:'#8A95A8', font:{size:10} }, grid: { color:'rgba(74,111,165,0.06)' } }
     }
   };
-
   const wCtx = document.getElementById('weightChart');
   if (wCtx) {
     if (weightChart) weightChart.destroy();
     weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} kg`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>v+' kg'}}} } });
   }
-
   const vCtx = document.getElementById('volumeChart');
   if (vCtx) {
     if (volumeChart) volumeChart.destroy();
@@ -496,13 +497,36 @@ function updateCharts() {
   }
 }
 
+function updateCharts() {
+  const machine = document.getElementById('machine-select')?.value;
+  const selectedMode = document.getElementById('mode-select')?.value || 'all';
+  if (!machine) return;
+
+  const machineData = allData.filter(r => r.machine === machine);
+  const rangeData = filterByRange(machineData, selectedRange);
+  const namedModes = [...new Set(rangeData.map(r => r.mode))].filter(Boolean).sort();
+  const allModes = rangeData.some(r => !r.mode) ? namedModes.concat(['__other__']) : namedModes;
+  const modes = selectedMode === 'all' ? allModes : [selectedMode];
+
+  const allDates = [...new Set(rangeData.map(r => r.date))].sort();
+  const labels = allDates.map(d => formatDateShort(d));
+
+  const weightDatasets = buildWeightDatasets(modes, rangeData, allDates);
+  const volumeDatasets = buildVolumeDatasets(modes, rangeData, allDates);
+
+  updatePRBadge(modes, weightDatasets, machineData);
+  updateLegend(modes);
+  renderCharts(labels, weightDatasets, volumeDatasets);
+}
+
 function buildPRs(data) {
   const bests = computePRs(data);
   const available = [...new Set(data.map(r => r.machine))];
-  const modes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+  const namedModes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+  const modes = data.some(r => !r.mode) ? namedModes.concat(['__other__']) : namedModes;
   const lower = m => m.toLowerCase();
 
-  const headerCells = modes.map(m => `<th>${m}</th>`).join('');
+  const headerCells = modes.map(m => `<th>${modeLabel(m)}</th>`).join('');
 
   function machineRows(machines) {
     return machines
@@ -510,7 +534,8 @@ function buildPRs(data) {
       .map(m => available.find(a => lower(a) === lower(m)))
       .map(machine => {
         const cells = modes.map(mode => {
-          const pr = bests[`${machine}|${mode}`];
+          const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
+          const pr = bests[key];
           if (!pr) return `<td><span class="pr-empty">—</span></td>`;
           return `<td><div class="pr-weight">${pr.weight} kg</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
         }).join('');
@@ -540,7 +565,8 @@ function buildPRs(data) {
   const otherMachines = available.filter(a => !knownMachines.includes(lower(a))).sort();
   const otherRows = otherMachines.map(machine => {
     const cells = modes.map(mode => {
-      const pr = bests[`${machine}|${mode}`];
+      const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
+      const pr = bests[key];
       if (!pr) return `<td><span class="pr-empty">—</span></td>`;
       return `<td><div class="pr-weight">${pr.weight} kg</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
     }).join('');
