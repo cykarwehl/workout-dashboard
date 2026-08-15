@@ -72,6 +72,12 @@
   .date-aging { color: var(--aging); }
   .date-plateau { color: var(--plateau); }
 
+  .pr-feed-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+  .pr-feed-item:first-child { border-top: none; }
+  .pr-feed-machine { font-weight: 600; font-size: 14px; color: var(--text); }
+  .pr-feed-meta { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+  .pr-feed-weight { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: var(--accent); }
+
   .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(248,247,255,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 10px 0 20px; z-index: 100; }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; transition: color 0.2s; }
   .nav-item.active { color: var(--accent); }
@@ -98,17 +104,6 @@
   .fade-in { animation: fadeIn 0.3s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  .ls-mode-wrap { display: flex; align-items: center; }
-  .ls-category { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
-  .ls-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .ls-card { background: var(--surface2); border: 1.5px solid transparent; border-radius: 10px; padding: 8px; cursor: pointer; transition: background 0.18s, border-color 0.18s; -webkit-tap-highlight-color: transparent; }
-  .ls-card.marked { background: #FFF3DC; border-color: #E8A020; }
-  .ls-machine { font-weight: 700; font-size: 12px; color: var(--text); display: block; line-height: 1.3; margin-bottom: 1px; }
-  .ls-date { font-size: 11px; font-weight: 500; display: block; margin-bottom: 6px; }
-  .ls-set-row { display: flex; flex-direction: column; border-top: 1px solid var(--border); padding: 4px 0; }
-  .ls-set-row:first-child { border-top: none; }
-  .ls-set-label { font-size: 11px; color: var(--muted); }
-  .ls-set-vals { font-size: 14px; font-weight: 700; color: var(--text); }
 </style>
 </head>
 <body>
@@ -149,7 +144,7 @@ let allData = [];
 let currentPage = 'overview';
 let weightChart = null;
 let volumeChart = null;
-let selectedRange = 3;
+let selectedRange = 6;
 
 async function fetchData() {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
@@ -226,71 +221,75 @@ function filterByRange(data, months) {
   return data.filter(r => { const dt = parseDate(r.date); return dt && dt >= cutoff; });
 }
 
-function getMarked() {
-  try { return new Set(JSON.parse(localStorage.getItem('marked-machines') || '[]')); }
-  catch { return new Set(); }
+function formatVolume(v) {
+  return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v);
 }
 
-function toggleCard(machine, el) {
-  const marked = getMarked();
-  if (marked.has(machine)) {
-    marked.delete(machine);
-    el.classList.remove('marked');
-  } else {
-    marked.add(machine);
-    el.classList.add('marked');
-  }
-  localStorage.setItem('marked-machines', JSON.stringify([...marked]));
+function getWeekKey(dt) {
+  const d = new Date(dt);
+  const dayIdx = (d.getDay() + 6) % 7; // Monday = 0
+  d.setDate(d.getDate() - dayIdx);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function buildLastSessionHTML(mode) {
-  const modeData = mode === 'all' ? allData : allData.filter(r => r.mode === mode);
-  const lower = m => m.toLowerCase();
-  const marked = getMarked();
+function computeStreak(dates) {
+  if (!dates.length) return { streak: 0, thisWeekCount: 0 };
+  const weekCounts = {};
+  dates.forEach(d => {
+    const dt = parseDate(d);
+    if (!dt) return;
+    const key = getWeekKey(dt).getTime();
+    weekCounts[key] = (weekCounts[key] || 0) + 1;
+  });
 
-  function machineCard(machineName) {
-    const rows = modeData.filter(r => lower(r.machine) === lower(machineName));
-    if (!rows.length) return '';
-    const lastDate = rows.map(r => r.date).sort().pop();
-    const sets = rows.filter(r => r.date === lastDate).sort((a, b) => a.setNum - b.setNum);
-    const name = sets[0].machine;
-    const isMarked = marked.has(name);
-    const setRows = sets.map(s => `
-      <div class="ls-set-row">
-        <span class="ls-set-label">Set ${s.setNum}</span>
-        <span class="ls-set-vals">${s.reps} x ${s.weight}kg</span>
-      </div>`).join('');
-    return `
-      <div class="ls-card ${isMarked ? 'marked' : ''}" onclick="toggleCard('${name}', this)">
-        <span class="ls-machine">${name}</span>
-        <span class="ls-date ${dateClass(lastDate)}">${formatDateShort(lastDate)}</span>
-        ${setRows}
-      </div>`;
-  }
+  const cursor = getWeekKey(new Date());
+  const thisWeekCount = weekCounts[cursor.getTime()] || 0;
+  if (thisWeekCount < 2) cursor.setDate(cursor.getDate() - 7); // in-progress week doesn't break the streak
 
-  let html = '';
-  for (const cat of MACHINE_CATEGORIES) {
-    const cards = cat.machines.map(machineCard).filter(Boolean).join('');
-    if (cards) html += `<div class="ls-category">${cat.label}</div><div class="ls-grid">${cards}</div>`;
+  let streak = 0;
+  while ((weekCounts[cursor.getTime()] || 0) >= 2) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 7);
   }
-  const knownMachines = new Set(MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower));
-  const otherCards = [...new Set(modeData.map(r => r.machine))]
-    .filter(m => !knownMachines.has(lower(m))).sort()
-    .map(machineCard).filter(Boolean).join('');
-  if (otherCards) html += `<div class="ls-category">Other</div><div class="ls-grid">${otherCards}</div>`;
-  return html || `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No data for this mode.</div>`;
+  return { streak, thisWeekCount };
 }
 
-function updateLastSession() {
-  const mode = document.getElementById('ls-mode-select')?.value || 'all';
-  const el = document.getElementById('last-session-content');
-  if (el) el.innerHTML = buildLastSessionHTML(mode);
+function buildRecentPRs(data) {
+  const prRows = data.filter(r => r.isPR && daysSince(r.date) <= 30);
+  const best = {};
+  prRows.forEach(r => {
+    const key = `${r.date}|${r.machine}|${r.mode}`;
+    if (!best[key] || r.weight > best[key].weight) best[key] = r;
+  });
+  const list = Object.values(best).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const body = list.length ? list.map(r => `
+      <div class="pr-feed-item">
+        <div class="pr-feed-info">
+          <div class="pr-feed-machine">${r.machine}</div>
+          <div class="pr-feed-meta">${modeLabel(r.mode || '__other__')} · ${formatDateShort(r.date)}</div>
+        </div>
+        <div class="pr-feed-weight">${r.weight} kg</div>
+      </div>`).join('')
+    : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 30 days.</div>`;
+
+  return `
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Recent PRs</span>
+        <span class="section-badge">last 30 days</span>
+      </div>
+      ${body}
+    </div>`;
 }
 
 function buildOverview(data) {
   const dates = getUniqueDates(data);
-  const machines = [...new Set(data.map(r => r.machine))].length;
-  const modes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+  const lastDate = dates[dates.length - 1] || '';
+  const daysSinceLast = dates.length ? daysSince(lastDate) : null;
+  const { streak, thisWeekCount } = computeStreak(dates);
+  const streakSub = thisWeekCount >= 3 ? '🔥 goal week' : `${thisWeekCount} session${thisWeekCount === 1 ? '' : 's'} this week`;
 
   const monthMap = {};
   dates.forEach(d => {
@@ -303,20 +302,32 @@ function buildOverview(data) {
   const maxVisits = Math.max(...monthEntries.map(e => e[1]), 1);
   const nowKey = new Date().toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
 
+  const sortedData = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const volumeMap = {};
+  sortedData.forEach(r => {
+    const dt = parseDate(r.date);
+    if (!dt) return;
+    const key = dt.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+    volumeMap[key] = (volumeMap[key] || 0) + r.reps * r.weight;
+  });
+  const volumeEntries = Object.entries(volumeMap).slice(-12);
+  const maxVolume = Math.max(...volumeEntries.map(e => e[1]), 1);
+
   return `
   <div class="page active fade-in" id="page-overview">
     <div class="kpi-grid">
       <div class="kpi">
-        <div class="kpi-label">Total workouts</div>
-        <div class="kpi-val">${dates.length}</div>
-        <div class="kpi-sub">sessions logged</div>
+        <div class="kpi-label">Days since last session</div>
+        <div class="kpi-val ${dateClass(lastDate)}">${daysSinceLast ?? '—'}</div>
+        <div class="kpi-sub">last trained ${lastDate ? formatDate(lastDate) : '—'}</div>
       </div>
       <div class="kpi">
-        <div class="kpi-label">Machines trained</div>
-        <div class="kpi-val">${machines}</div>
-        <div class="kpi-sub">unique machines</div>
+        <div class="kpi-label">Weekly streak</div>
+        <div class="kpi-val">${streak}</div>
+        <div class="kpi-sub">${streakSub}</div>
       </div>
     </div>
+    ${buildRecentPRs(data)}
     <div class="section">
       <div class="section-header">
         <span class="section-title">Gym visits per month</span>
@@ -334,15 +345,18 @@ function buildOverview(data) {
     </div>
     <div class="section">
       <div class="section-header">
-        <span class="section-title">Last session</span>
-        <div class="ls-mode-wrap">
-          <select class="styled-select" id="ls-mode-select" onchange="updateLastSession()" style="font-size:13px;padding:6px 10px;">
-            <option value="all">All modes</option>
-            ${modes.map(m => `<option value="${m}">${m}</option>`).join('')}
-          </select>
-        </div>
+        <span class="section-title">Total volume lifted</span>
+        <span class="section-badge">reps × kg per month</span>
       </div>
-      <div id="last-session-content">${buildLastSessionHTML('all')}</div>
+      <div class="month-bars">
+        ${volumeEntries.map(([label, vol]) => `
+          <div class="month-col">
+            <div class="month-bar ${label === nowKey ? 'current' : ''}" style="height:${Math.round(vol/maxVolume*80)}px">
+              <span class="month-bar-val">${formatVolume(vol)}</span>
+            </div>
+            <div class="month-label">${label.split(' ')[0]}</div>
+          </div>`).join('')}
+      </div>
     </div>
   </div>`;
 }
@@ -377,8 +391,7 @@ function buildProgress(data) {
   <div class="page fade-in" id="page-progress">
     <div class="filter-row">
       <select class="styled-select" id="mode-select" onchange="updateCharts()">
-        <option value="all">All modes</option>
-        ${modes.map(m => `<option value="${m}">${m}</option>`).join('')}
+        ${modes.map(m => `<option value="${m}"${m === 'Adaptive' ? ' selected' : ''}>${m}</option>`).join('')}
         ${hasOther ? `<option value="__other__">Other</option>` : ''}
       </select>
       <select class="styled-select" id="machine-select" onchange="onMachineChange()">
@@ -386,10 +399,10 @@ function buildProgress(data) {
       </select>
     </div>
     <div class="pill-row">
-      <button class="pill" onclick="setRange(1,this)">1M</button>
-      <button class="pill active" onclick="setRange(3,this)">3M</button>
-      <button class="pill" onclick="setRange(6,this)">6M</button>
+      <button class="pill active" onclick="setRange(6,this)">6M</button>
       <button class="pill" onclick="setRange(12,this)">12M</button>
+      <button class="pill" onclick="setRange(18,this)">18M</button>
+      <button class="pill" onclick="setRange(24,this)">24M</button>
     </div>
     <div class="section">
       <div class="section-header">
@@ -499,14 +512,12 @@ function renderCharts(labels, weightDatasets, volumeDatasets) {
 
 function updateCharts() {
   const machine = document.getElementById('machine-select')?.value;
-  const selectedMode = document.getElementById('mode-select')?.value || 'all';
+  const selectedMode = document.getElementById('mode-select')?.value;
   if (!machine) return;
 
   const machineData = allData.filter(r => r.machine === machine);
   const rangeData = filterByRange(machineData, selectedRange);
-  const namedModes = [...new Set(rangeData.map(r => r.mode))].filter(Boolean).sort();
-  const allModes = rangeData.some(r => !r.mode) ? namedModes.concat(['__other__']) : namedModes;
-  const modes = selectedMode === 'all' ? allModes : [selectedMode];
+  const modes = selectedMode ? [selectedMode] : [];
 
   const allDates = [...new Set(rangeData.map(r => r.date))].sort();
   const labels = allDates.map(d => formatDateShort(d));
