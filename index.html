@@ -78,10 +78,20 @@
   .pr-feed-meta { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 500; }
   .pr-feed-weight { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: var(--accent); }
 
+  .year-nav-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--accent); width: 26px; height: 26px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .year-nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .streak-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 12px 6px; }
+  .streak-week { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .streak-month-label { font-size: 9px; color: var(--muted); font-weight: 600; height: 11px; line-height: 11px; white-space: nowrap; }
+  .streak-circle { width: 20px; height: 20px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border2); flex-shrink: 0; }
+  .streak-circle.floor { background: var(--accent); border-color: var(--accent); }
+  .streak-circle.goal { background: var(--success); border-color: var(--success); }
+  .streak-circle.future { background: transparent; border: 1px dashed var(--border2); opacity: 0.5; }
+
   .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(248,247,255,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 10px 0 20px; z-index: 100; }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; transition: color 0.2s; }
   .nav-item.active { color: var(--accent); }
-  .nav-icon { font-size: 24px; }
+  .nav-icon { width: 26px; height: 26px; object-fit: contain; }
 
   .page { display: none; }
   .page.active { display: block; }
@@ -109,7 +119,7 @@
 <body>
 
 <div class="topbar">
-  <h1>My Workout Dashboard</h1>
+  <h1>Workout Dashboard</h1>
   <p id="last-sync">Loading...</p>
 </div>
 
@@ -122,15 +132,19 @@
 
 <nav class="bottom-nav">
   <div class="nav-item active" onclick="showPage('overview')">
-    <span class="nav-icon">⚡</span>
+    <img class="nav-icon" src="icons/Overview.svg" alt="">
     <span>Overview</span>
   </div>
+  <div class="nav-item" onclick="showPage('streak')">
+    <img class="nav-icon" src="icons/streak.svg" alt="">
+    <span>Streak</span>
+  </div>
   <div class="nav-item" onclick="showPage('progress')">
-    <span class="nav-icon">📈</span>
+    <img class="nav-icon" src="icons/Progress.svg" alt="">
     <span>Progress</span>
   </div>
   <div class="nav-item" onclick="showPage('prs')">
-    <span class="nav-icon">🏆</span>
+    <img class="nav-icon" src="icons/PRs.svg" alt="">
     <span>PRs</span>
   </div>
 </nav>
@@ -215,6 +229,21 @@ function computePRs(data) {
   return bests;
 }
 
+function computePRAchievements(data) {
+  const bests = {};
+  const achievements = [];
+  const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
+  sorted.forEach(r => {
+    const key = `${r.machine}|${r.mode}`;
+    const prevBest = bests[key];
+    if (prevBest === undefined || r.weight > prevBest) {
+      bests[key] = r.weight;
+      achievements.push({ weight: r.weight, date: r.date, machine: r.machine, mode: r.mode });
+    }
+  });
+  return achievements;
+}
+
 function filterByRange(data, months) {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - months);
@@ -233,8 +262,7 @@ function getWeekKey(dt) {
   return d;
 }
 
-function computeStreak(dates) {
-  if (!dates.length) return { streak: 0, thisWeekCount: 0 };
+function computeWeekCounts(dates) {
   const weekCounts = {};
   dates.forEach(d => {
     const dt = parseDate(d);
@@ -242,6 +270,12 @@ function computeStreak(dates) {
     const key = getWeekKey(dt).getTime();
     weekCounts[key] = (weekCounts[key] || 0) + 1;
   });
+  return weekCounts;
+}
+
+function computeStreak(dates) {
+  if (!dates.length) return { streak: 0, thisWeekCount: 0 };
+  const weekCounts = computeWeekCounts(dates);
 
   const cursor = getWeekKey(new Date());
   const thisWeekCount = weekCounts[cursor.getTime()] || 0;
@@ -256,13 +290,9 @@ function computeStreak(dates) {
 }
 
 function buildRecentPRs(data) {
-  const prRows = data.filter(r => r.isPR && daysSince(r.date) <= 30);
-  const best = {};
-  prRows.forEach(r => {
-    const key = `${r.date}|${r.machine}|${r.mode}`;
-    if (!best[key] || r.weight > best[key].weight) best[key] = r;
-  });
-  const list = Object.values(best).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const list = computePRAchievements(data)
+    .filter(r => daysSince(r.date) <= 7)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const body = list.length ? list.map(r => `
       <div class="pr-feed-item">
@@ -272,24 +302,105 @@ function buildRecentPRs(data) {
         </div>
         <div class="pr-feed-weight">${r.weight} kg</div>
       </div>`).join('')
-    : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 30 days.</div>`;
+    : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 7 days.</div>`;
 
   return `
     <div class="section">
       <div class="section-header">
         <span class="section-title">Recent PRs</span>
-        <span class="section-badge">last 30 days</span>
+        <span class="section-badge">last 7 days</span>
       </div>
       ${body}
     </div>`;
+}
+
+function weeksInYear(year) {
+  let d = getWeekKey(new Date(year, 0, 1));
+  while (d.getFullYear() < year) d.setDate(d.getDate() + 7);
+  const weeks = [];
+  while (d.getFullYear() === year) {
+    weeks.push(new Date(d));
+    d.setDate(d.getDate() + 7);
+  }
+  return weeks;
+}
+
+let selectedStreakYear = new Date().getFullYear();
+let streakMinYear = selectedStreakYear;
+
+function weekTier(count, isFuture) {
+  if (isFuture) return 'future';
+  if (count >= 3) return 'goal';
+  if (count >= 2) return 'floor';
+  return 'below';
+}
+
+function buildStreakYearGrid(data, year) {
+  const weekCounts = computeWeekCounts(getUniqueDates(data));
+  const weeks = weeksInYear(year);
+  const todayWeekStart = getWeekKey(new Date()).getTime();
+
+  return weeks.map((monday, i) => {
+    const isFirstOfMonth = i === 0 || monday.getMonth() !== weeks[i - 1].getMonth();
+    const label = isFirstOfMonth ? monday.toLocaleDateString('en-GB', { month: 'short' }) : '';
+    const count = weekCounts[monday.getTime()] || 0;
+    const tier = weekTier(count, monday.getTime() > todayWeekStart);
+    const title = `${formatDateShort(monday.toISOString().slice(0, 10))}: ${count} session${count === 1 ? '' : 's'}`;
+    return `<div class="streak-week"><div class="streak-month-label">${label}</div><div class="streak-circle ${tier}" title="${title}"></div></div>`;
+  }).join('');
+}
+
+function updateStreakYear() {
+  document.getElementById('streak-year-label').textContent = selectedStreakYear;
+  document.getElementById('streak-grid').innerHTML = buildStreakYearGrid(allData, selectedStreakYear);
+  document.getElementById('streak-prev').disabled = selectedStreakYear <= streakMinYear;
+  document.getElementById('streak-next').disabled = selectedStreakYear >= new Date().getFullYear();
+}
+
+function changeStreakYear(delta) {
+  selectedStreakYear += delta;
+  updateStreakYear();
+}
+
+function buildStreak(data) {
+  const dates = getUniqueDates(data);
+  const { streak } = computeStreak(dates);
+  const years = dates.map(d => parseDate(d)).filter(Boolean).map(d => d.getFullYear());
+  streakMinYear = years.length ? Math.min(...years) : new Date().getFullYear();
+  selectedStreakYear = new Date().getFullYear();
+
+  return `
+  <div class="page fade-in" id="page-streak">
+    <div class="kpi-grid" style="grid-template-columns:1fr;">
+      <div class="kpi">
+        <div class="kpi-label">Current streak</div>
+        <div class="kpi-val">${streak}</div>
+        <div class="kpi-sub">week${streak === 1 ? '' : 's'} in a row, 2+ sessions</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Weekly activity</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="year-nav-btn" id="streak-prev" onclick="changeStreakYear(-1)">‹</button>
+          <span class="section-badge" id="streak-year-label">${selectedStreakYear}</span>
+          <button class="year-nav-btn" id="streak-next" onclick="changeStreakYear(1)">›</button>
+        </div>
+      </div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--surface2);border:1px solid var(--border2)"></span>&lt; 2 sessions</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span>2 sessions</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--success)"></span>3+ sessions</div>
+      </div>
+      <div class="streak-grid" id="streak-grid">${buildStreakYearGrid(data, selectedStreakYear)}</div>
+    </div>
+  </div>`;
 }
 
 function buildOverview(data) {
   const dates = getUniqueDates(data);
   const lastDate = dates[dates.length - 1] || '';
   const daysSinceLast = dates.length ? daysSince(lastDate) : null;
-  const { streak, thisWeekCount } = computeStreak(dates);
-  const streakSub = thisWeekCount >= 3 ? '🔥 goal week' : `${thisWeekCount} session${thisWeekCount === 1 ? '' : 's'} this week`;
 
   const monthMap = {};
   dates.forEach(d => {
@@ -315,16 +426,11 @@ function buildOverview(data) {
 
   return `
   <div class="page active fade-in" id="page-overview">
-    <div class="kpi-grid">
+    <div class="kpi-grid" style="grid-template-columns:1fr;">
       <div class="kpi">
         <div class="kpi-label">Days since last session</div>
         <div class="kpi-val ${dateClass(lastDate)}">${daysSinceLast ?? '—'}</div>
         <div class="kpi-sub">last trained ${lastDate ? formatDate(lastDate) : '—'}</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Weekly streak</div>
-        <div class="kpi-val">${streak}</div>
-        <div class="kpi-sub">${streakSub}</div>
       </div>
     </div>
     ${buildRecentPRs(data)}
@@ -612,7 +718,7 @@ function buildPRs(data) {
 function showPage(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach((el,i) => {
-    el.classList.toggle('active', ['overview','progress','prs'][i] === page);
+    el.classList.toggle('active', ['overview','streak','progress','prs'][i] === page);
   });
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   const target = document.getElementById(`page-${page}`);
@@ -629,7 +735,7 @@ async function init() {
     const dates = getUniqueDates(allData);
     const lastDate = dates[dates.length-1] || '';
     document.getElementById('last-sync').textContent = `Last session: ${formatDate(lastDate)}`;
-    document.getElementById('app').innerHTML = `<main>${buildOverview(allData)}${buildProgress(allData)}${buildPRs(allData)}</main>`;
+    document.getElementById('app').innerHTML = `<main>${buildOverview(allData)}${buildProgress(allData)}${buildPRs(allData)}${buildStreak(allData)}</main>`;
     showPage('overview');
   } catch(e) {
     document.getElementById('app').innerHTML = `

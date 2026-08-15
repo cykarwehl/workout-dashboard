@@ -1,10 +1,14 @@
-const CACHE = 'workout-dashboard-v2';
+const CACHE = 'workout-dashboard-v3';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon.svg',
   './icons/icon-maskable.svg',
+  './icons/Overview.svg',
+  './icons/streak.svg',
+  './icons/Progress.svg',
+  './icons/PRs.svg',
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
 ];
