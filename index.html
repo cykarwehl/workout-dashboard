@@ -168,6 +168,20 @@ async function fetchData() {
   return json.values || [];
 }
 
+// The gym renamed "Negative" to "Eccentric" — same training mode, so both spellings
+// collapse to one label to keep the comparison history intact.
+const MODE_ALIASES = [
+  { canonical: 'Eccentric', matches: ['eccentric', 'negative', 'negativ', 'exzentrisch'] },
+];
+
+function normalizeMode(raw) {
+  const mode = (raw || '').trim();
+  if (!mode) return '';
+  const lower = mode.toLowerCase();
+  const alias = MODE_ALIASES.find(a => a.matches.some(m => lower.includes(m)));
+  return alias ? alias.canonical : mode;
+}
+
 function parseRows(rows) {
   if (rows.length < 2) return [];
   return rows.slice(1).map(row => ({
@@ -176,7 +190,7 @@ function parseRows(rows) {
     setNum: parseInt(row[2]) || 0,
     reps: parseInt(row[3]) || 0,
     weight: parseFloat(row[4]) || 0,
-    mode: row[5] || '',
+    mode: normalizeMode(row[5]),
     isPR: ['true','yes','1'].includes((row[6] || '').toLowerCase()),
     file: row[7] || ''
   })).filter(r => r.machine && r.date && r.weight > 0);
