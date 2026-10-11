@@ -274,18 +274,37 @@ function computePRs(data) {
   return bests;
 }
 
-function computePRAchievements(data) {
+// A session PR = the most reps × kg on one machine (per mode) in a single day.
+// Bodyweight sessions (0 kg) compare by total reps instead.
+function computeSessionPRAchievements(data) {
+  const sessions = {};
+  data.forEach(r => {
+    const s = sessions[`${r.date}|${r.machine}|${r.mode}`] ||= { date: r.date, machine: r.machine, mode: r.mode, volume: 0, reps: 0 };
+    s.volume += r.reps * r.weight;
+    s.reps += r.reps;
+  });
   const bests = {};
   const achievements = [];
-  const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
-  sorted.forEach(r => {
-    const key = `${r.machine}|${r.mode}`;
-    if (beatsPR(r, bests[key])) {
-      bests[key] = r;
-      achievements.push({ weight: r.weight, reps: r.reps, date: r.date, machine: r.machine, mode: r.mode });
+  Object.values(sessions).sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(s => {
+    const key = `${s.machine}|${s.mode}`;
+    const prev = bests[key];
+    const better = !prev || s.volume > prev.volume || (s.volume === 0 && prev.volume === 0 && s.reps > prev.reps);
+    if (better) {
+      bests[key] = s;
+      achievements.push({ ...s, prev });
     }
   });
   return achievements;
+}
+
+function formatSessionPR(s) {
+  return s.volume > 0 ? `${formatVolume(s.volume)} kg` : `${s.reps} reps`;
+}
+
+function sessionPRGain(s) {
+  if (!s.prev) return 'first session';
+  const [now, before] = s.volume > 0 ? [s.volume, s.prev.volume] : [s.reps, s.prev.reps];
+  return before > 0 ? `+${Math.round((now - before) / before * 100)}%` : 'new best';
 }
 
 function filterByRange(data, months) {
@@ -334,7 +353,7 @@ function computeStreak(dates) {
 }
 
 function buildRecentPRs(data) {
-  const list = computePRAchievements(data)
+  const list = computeSessionPRAchievements(data)
     .filter(r => daysSince(r.date) <= 7)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -342,9 +361,9 @@ function buildRecentPRs(data) {
       <div class="pr-feed-item">
         <div class="pr-feed-info">
           <div class="pr-feed-machine">${r.machine}</div>
-          <div class="pr-feed-meta">${modeLabel(r.mode || '__other__')} · ${formatDateShort(r.date)}</div>
+          <div class="pr-feed-meta">${modeLabel(r.mode || '__other__')} · ${formatDateShort(r.date)} · ${sessionPRGain(r)}</div>
         </div>
-        <div class="pr-feed-weight">${formatLoad(r)}</div>
+        <div class="pr-feed-weight">${formatSessionPR(r)}</div>
       </div>`).join('')
     : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 7 days.</div>`;
 
@@ -352,7 +371,7 @@ function buildRecentPRs(data) {
     <div class="section">
       <div class="section-header">
         <span class="section-title">Recent PRs</span>
-        <span class="section-badge">last 7 days</span>
+        <span class="section-badge">reps × kg · last 7 days</span>
       </div>
       ${body}
     </div>`;
@@ -477,36 +496,43 @@ function setCalories(r, bodyWeight) {
 
 function buildCalories(data) {
   const bodyWeight = readBodyWeight();
-  const sessions = {};
+  const kcalMap = {};
+  let estimated = false, recorded = false;
   data.forEach(r => {
     const c = setCalories(r, bodyWeight);
-    if (!c) return;
-    const s = sessions[r.date] ||= { kcal: 0, estimated: false, exercises: new Set() };
-    s.kcal += c.kcal;
-    s.estimated ||= c.estimated;
-    s.exercises.add(r.machine);
+    const dt = parseDate(r.date);
+    if (!c || !dt) return;
+    const key = dt.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+    kcalMap[key] = (kcalMap[key] || 0) + c.kcal;
+    estimated ||= c.estimated;
+    recorded ||= !c.estimated;
   });
-  const list = Object.entries(sessions).sort(([a], [b]) => new Date(b) - new Date(a)).slice(0, 5);
+  // Same months as the gym-visits chart so the bars line up.
+  const months = [...new Set(getUniqueDates(data).map(d => parseDate(d)).filter(Boolean)
+    .map(dt => dt.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })))].slice(-12);
+  const maxKcal = Math.max(...months.map(m => kcalMap[m] || 0), 1);
+  const nowKey = new Date().toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
 
-  const hasManual = data.some(r => r.file === 'manual');
-  const empty = !bodyWeight && hasManual
+  const empty = !bodyWeight && data.some(r => r.file === 'manual')
     ? 'Add your body weight on the Log page to estimate calories.'
     : 'No calorie data yet.';
-  const body = list.length ? list.map(([date, s]) => `
-      <div class="pr-feed-item">
-        <div class="pr-feed-info">
-          <div class="pr-feed-machine">${formatDate(date)}</div>
-          <div class="pr-feed-meta">${s.exercises.size} exercise${s.exercises.size > 1 ? 's' : ''}${s.estimated ? ' · estimated' : ''}</div>
-        </div>
-        <div class="pr-feed-weight">${s.estimated ? '≈ ' : ''}${Math.round(s.kcal)} kcal</div>
-      </div>`).join('')
+  const body = Object.keys(kcalMap).length ? `
+      <div class="month-bars">
+        ${months.map(label => `
+          <div class="month-col">
+            <div class="month-bar ${label === nowKey ? 'current' : ''}" style="height:${Math.round((kcalMap[label] || 0)/maxKcal*80)}px">
+              <span class="month-bar-val">${kcalMap[label] ? formatVolume(kcalMap[label]) : ''}</span>
+            </div>
+            <div class="month-label">${label.split(' ')[0]}</div>
+          </div>`).join('')}
+      </div>`
     : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">${empty}</div>`;
 
   return `
     <div class="section" id="calories-section">
       <div class="section-header">
-        <span class="section-title">Calories burned</span>
-        <span class="section-badge">last 5 sessions</span>
+        <span class="section-title">Total calories burned</span>
+        <span class="section-badge">kcal per month${estimated ? (recorded ? ' · partly estimated' : ' · estimated') : ''}</span>
       </div>
       ${body}
     </div>`;
@@ -549,7 +575,6 @@ function buildOverview(data) {
       </div>
     </div>
     ${buildRecentPRs(data)}
-    ${buildCalories(data)}
     <div class="section">
       <div class="section-header">
         <span class="section-title">Gym visits per month</span>
@@ -580,6 +605,7 @@ function buildOverview(data) {
           </div>`).join('')}
       </div>
     </div>
+    ${buildCalories(data)}
   </div>`;
 }
 
