@@ -1,4 +1,4 @@
-const CACHE = 'workout-dashboard-v4';
+const CACHE = 'workout-dashboard-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './icons/streak.svg',
   './icons/Progress.svg',
   './icons/PRs.svg',
+  './icons/Log.svg',
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
 ];
@@ -33,6 +34,9 @@ self.addEventListener('activate', event => {
 
 // Fetch: cache-first for app shell, network-first for Sheets API
 self.addEventListener('fetch', event => {
+  // Log saves are POSTs to Apps Script — never intercept or cache them
+  if (event.request.method !== 'GET') return;
+
   const url = event.request.url;
 
   // Always go to the network for Google Sheets data

@@ -16,6 +16,15 @@ Written 2026-08-15. Read this before touching the project again after a long gap
    (`index.html:143-149`) with a hardcoded API key, then renders Overview /
    PRs / charts client-side. No build step, no backend — plain static HTML.
 
+4. **Manual log (Log page) → Apps Script web app.** Free-weight/cable
+   exercises the armband doesn't capture are typed into the Log page, which
+   POSTs to the `doPost` in [apps-script/manual-log.gs](apps-script/manual-log.gs)
+   (`LOG_URL` in `index.html`). It appends rows with a blank Mode and
+   `manual` in the Image Filename column. Weight 0 = bodyweight set; those
+   are ranked and charted by reps. The web app is deployed with access
+   "Anyone", so every request must carry the passcode stored in Script
+   Properties as `LOG_TOKEN` (also saved in the phone's localStorage).
+
 ## Security posture (checked 2026-08-15)
 
 **Two Google Cloud API keys exist:**

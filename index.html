@@ -111,6 +111,22 @@
   .legend-item { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; font-weight: 500; }
   .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
 
+  .log-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 600; margin: 14px 0 6px; }
+  .log-label:first-of-type { margin-top: 0; }
+  .log-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: 'Nunito', sans-serif; font-size: 16px; padding: 11px 14px; }
+  .log-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .set-row { display: grid; grid-template-columns: 44px 1fr 1fr 32px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .set-row-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .set-num { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .set-remove { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+  .btn { width: 100%; border-radius: 12px; font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 700; padding: 12px; cursor: pointer; }
+  .btn-ghost { background: transparent; border: 1px dashed var(--border2); color: var(--accent); margin-top: 4px; }
+  .btn-primary { background: var(--accent); border: 1px solid var(--accent); color: #fff; margin-top: 16px; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .log-status { font-size: 13px; font-weight: 600; margin-top: 12px; min-height: 18px; text-align: center; }
+  .log-status.ok { color: var(--success); }
+  .log-status.err { color: var(--plateau); }
+
   .fade-in { animation: fadeIn 0.3s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -146,6 +162,10 @@
   <div class="nav-item" onclick="showPage('prs')">
     <img class="nav-icon" src="icons/PRs.svg" alt="">
     <span>PRs</span>
+  </div>
+  <div class="nav-item" onclick="showPage('log')">
+    <img class="nav-icon" src="icons/Log.svg" alt="">
+    <span>Log</span>
   </div>
 </nav>
 
@@ -193,7 +213,7 @@ function parseRows(rows) {
     mode: normalizeMode(row[5]),
     isPR: ['true','yes','1'].includes((row[6] || '').toLowerCase()),
     file: row[7] || ''
-  })).filter(r => r.machine && r.date && r.weight > 0);
+  })).filter(r => r.machine && r.date && (r.weight > 0 || r.reps > 0)); // weight 0 = bodyweight set
 }
 
 function parseDate(d) {
@@ -230,14 +250,24 @@ function getUniqueDates(data) {
   return [...new Set(data.map(r => r.date))].sort();
 }
 
+// Heavier always wins; between bodyweight sets (0 kg), more reps wins.
+function beatsPR(r, prev) {
+  if (!prev) return true;
+  if (r.weight !== prev.weight) return r.weight > prev.weight;
+  return r.weight === 0 && r.reps > prev.reps;
+}
+
+function formatLoad(r) {
+  return r.weight > 0 ? `${r.weight} kg` : `${r.reps} reps`;
+}
+
 function computePRs(data) {
   const bests = {};
   const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
   sorted.forEach(r => {
     const key = `${r.machine}|${r.mode}`;
-    const prev = bests[key];
-    if (!prev || r.weight > prev.weight) {
-      bests[key] = { weight: r.weight, date: r.date, machine: r.machine, mode: r.mode };
+    if (beatsPR(r, bests[key])) {
+      bests[key] = { weight: r.weight, reps: r.reps, date: r.date, machine: r.machine, mode: r.mode };
     }
   });
   return bests;
@@ -249,10 +279,9 @@ function computePRAchievements(data) {
   const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
   sorted.forEach(r => {
     const key = `${r.machine}|${r.mode}`;
-    const prevBest = bests[key];
-    if (prevBest === undefined || r.weight > prevBest) {
-      bests[key] = r.weight;
-      achievements.push({ weight: r.weight, date: r.date, machine: r.machine, mode: r.mode });
+    if (beatsPR(r, bests[key])) {
+      bests[key] = r;
+      achievements.push({ weight: r.weight, reps: r.reps, date: r.date, machine: r.machine, mode: r.mode });
     }
   });
   return achievements;
@@ -314,7 +343,7 @@ function buildRecentPRs(data) {
           <div class="pr-feed-machine">${r.machine}</div>
           <div class="pr-feed-meta">${modeLabel(r.mode || '__other__')} · ${formatDateShort(r.date)}</div>
         </div>
-        <div class="pr-feed-weight">${r.weight} kg</div>
+        <div class="pr-feed-weight">${formatLoad(r)}</div>
       </div>`).join('')
     : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 7 days.</div>`;
 
@@ -482,9 +511,9 @@ function buildOverview(data) {
 }
 
 const MACHINE_CATEGORIES = [
-  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pulldowns', 'Dumbbell Rows 1 Arm'] },
-  { label: 'Core',       machines: ['Abdominal Crunch','Back Extension','Rotary Torso'] },
-  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat'] },
+  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pressdown', 'Cable Face Pull', 'Dumbbell Rows 1 Arm'] },
+  { label: 'Core',       machines: ['Abdominal Crunch','Back Extension'] },
+  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust'] },
 ];
 
 function buildMachineOptions(available) {
@@ -512,7 +541,7 @@ function buildProgress(data) {
     <div class="filter-row">
       <select class="styled-select" id="mode-select" onchange="updateCharts()">
         ${modes.map(m => `<option value="${m}"${m === 'Adaptive' ? ' selected' : ''}>${m}</option>`).join('')}
-        ${hasOther ? `<option value="__other__">Other</option>` : ''}
+        ${hasOther ? `<option value="__other__">No mode</option>` : ''}
       </select>
       <select class="styled-select" id="machine-select" onchange="onMachineChange()">
         ${buildMachineOptions(machines)}
@@ -526,7 +555,7 @@ function buildProgress(data) {
     </div>
     <div class="section">
       <div class="section-header">
-        <span class="section-title">Weight over time</span>
+        <span class="section-title" id="weight-title">Weight over time</span>
         <span class="section-badge" id="weight-pr-badge"></span>
       </div>
       <div class="legend-row" id="weight-legend"></div>
@@ -535,7 +564,7 @@ function buildProgress(data) {
     <div class="section">
       <div class="section-header">
         <span class="section-title">Volume over time</span>
-        <span class="section-badge">reps × kg per session</span>
+        <span class="section-badge" id="volume-badge">reps × kg per session</span>
       </div>
       <div class="legend-row" id="volume-legend"></div>
       <div class="chart-wrap-sm"><canvas id="volumeChart"></canvas></div>
@@ -550,7 +579,16 @@ const MODE_COLORS = [
   { line: '#C9923A', bar: 'rgba(201,146,58,0.7)' },
 ];
 
+// Free-weight exercises have no mode, so jump to a mode the chosen machine actually has.
 function onMachineChange() {
+  const machine = document.getElementById('machine-select')?.value;
+  const modeSelect = document.getElementById('mode-select');
+  if (machine && modeSelect) {
+    const rows = allData.filter(r => r.machine === machine);
+    if (!rows.some(modeFilter(modeSelect.value)) && rows.length) {
+      modeSelect.value = rows[rows.length - 1].mode || '__other__';
+    }
+  }
   updateCharts();
 }
 
@@ -562,38 +600,45 @@ function setRange(months, btn) {
 }
 
 const modeFilter = mode => mode === '__other__' ? r => !r.mode : r => r.mode === mode;
-const modeLabel = mode => mode === '__other__' ? 'Other' : mode;
+const modeLabel = mode => mode === '__other__' ? 'No mode' : mode;
 
-function buildWeightDatasets(modes, rangeData, allDates) {
+// Bodyweight-only exercises (every set 0 kg) are charted in reps instead of kg.
+function chartUnit(rows) {
+  return rows.length && rows.every(r => r.weight === 0) ? 'reps' : 'kg';
+}
+
+function buildWeightDatasets(modes, rangeData, allDates, unit) {
+  const metric = unit === 'reps' ? r => r.reps : r => r.weight;
   return modes.map((mode, i) => {
     const color = MODE_COLORS[i % MODE_COLORS.length];
     const modeRows = rangeData.filter(modeFilter(mode)).sort((a,b) => new Date(a.date)-new Date(b.date));
-    const maxW = modeRows.length ? Math.max(...modeRows.map(r => r.weight)) : 0;
+    const maxW = modeRows.length ? Math.max(...modeRows.map(metric)) : 0;
     const data = allDates.map(d => {
       const rows = modeRows.filter(r => r.date === d);
-      return rows.length ? Math.max(...rows.map(r => r.weight)) : null;
+      return rows.length ? Math.max(...rows.map(metric)) : null;
     });
     return { label: modeLabel(mode), data, borderColor: color.line, backgroundColor: color.line+'15', borderWidth: 2, fill: modes.length===1, tension: 0.3, spanGaps: true, pointBackgroundColor: data.map(w => w===maxW ? color.line : '#fff'), pointBorderColor: color.line, pointRadius: 4, pointHoverRadius: 6, _maxW: maxW };
   });
 }
 
-function buildVolumeDatasets(modes, rangeData, allDates) {
+function buildVolumeDatasets(modes, rangeData, allDates, unit) {
+  const setVolume = unit === 'reps' ? r => r.reps : r => r.reps * r.weight;
   return modes.map((mode, i) => {
     const color = MODE_COLORS[i % MODE_COLORS.length];
     const modeRows = rangeData.filter(modeFilter(mode));
     const data = allDates.map(d => {
       const rows = modeRows.filter(r => r.date === d);
-      return rows.length ? rows.reduce((sum, r) => sum + r.reps * r.weight, 0) : null;
+      return rows.length ? rows.reduce((sum, r) => sum + setVolume(r), 0) : null;
     });
     return { label: modeLabel(mode), data, backgroundColor: color.bar, borderRadius: 4, borderSkipped: false };
   });
 }
 
-function updatePRBadge(modes, weightDatasets, machineData) {
+function updatePRBadge(modes, weightDatasets, machineData, unit) {
   const badge = document.getElementById('weight-pr-badge');
   if (!badge) return;
   if (modes.length === 1 && weightDatasets[0]) {
-    badge.textContent = `PR: ${weightDatasets[0]._maxW} kg`;
+    badge.textContent = `PR: ${weightDatasets[0]._maxW} ${unit}`;
   } else {
     const ov = machineData.length ? Math.max(...machineData.map(r => r.weight)) : 0;
     badge.textContent = `Overall PR: ${ov} kg`;
@@ -609,7 +654,9 @@ function updateLegend(modes) {
   const vl = document.getElementById('volume-legend'); if (vl) vl.innerHTML = html;
 }
 
-function renderCharts(labels, weightDatasets, volumeDatasets) {
+function renderCharts(labels, weightDatasets, volumeDatasets, unit) {
+  const wTitle = document.getElementById('weight-title'); if (wTitle) wTitle.textContent = unit === 'reps' ? 'Reps over time' : 'Weight over time';
+  const vBadge = document.getElementById('volume-badge'); if (vBadge) vBadge.textContent = unit === 'reps' ? 'total reps per session' : 'reps × kg per session';
   const baseOpts = {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false }, tooltip: { backgroundColor:'#fff', borderColor:'rgba(74,111,165,0.2)', borderWidth:1, titleColor:'#8A95A8', bodyColor:'#1E2D4A', padding:10 } },
@@ -621,7 +668,7 @@ function renderCharts(labels, weightDatasets, volumeDatasets) {
   const wCtx = document.getElementById('weightChart');
   if (wCtx) {
     if (weightChart) weightChart.destroy();
-    weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} kg`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>v+' kg'}}} } });
+    weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} ${unit}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>v+' '+unit}}} } });
   }
   const vCtx = document.getElementById('volumeChart');
   if (vCtx) {
@@ -642,12 +689,13 @@ function updateCharts() {
   const allDates = [...new Set(rangeData.map(r => r.date))].sort();
   const labels = allDates.map(d => formatDateShort(d));
 
-  const weightDatasets = buildWeightDatasets(modes, rangeData, allDates);
-  const volumeDatasets = buildVolumeDatasets(modes, rangeData, allDates);
+  const unit = chartUnit(rangeData.filter(r => modes.some(m => modeFilter(m)(r))));
+  const weightDatasets = buildWeightDatasets(modes, rangeData, allDates, unit);
+  const volumeDatasets = buildVolumeDatasets(modes, rangeData, allDates, unit);
 
-  updatePRBadge(modes, weightDatasets, machineData);
+  updatePRBadge(modes, weightDatasets, machineData, unit);
   updateLegend(modes);
-  renderCharts(labels, weightDatasets, volumeDatasets);
+  renderCharts(labels, weightDatasets, volumeDatasets, unit);
 }
 
 function buildPRs(data) {
@@ -668,7 +716,7 @@ function buildPRs(data) {
           const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
           const pr = bests[key];
           if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-          return `<td><div class="pr-weight">${pr.weight} kg</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
+          return `<td><div class="pr-weight">${formatLoad(pr)}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
         }).join('');
         return `<tr><td>${machine}</td>${cells}</tr>`;
       }).join('');
@@ -699,7 +747,7 @@ function buildPRs(data) {
       const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
       const pr = bests[key];
       if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-      return `<td><div class="pr-weight">${pr.weight} kg</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
+      return `<td><div class="pr-weight">${formatLoad(pr)}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
     }).join('');
     return `<tr><td>${machine}</td>${cells}</tr>`;
   }).join('');
@@ -729,28 +777,161 @@ function buildPRs(data) {
   </div>`;
 }
 
+// Manual logging for exercises the eGym armband doesn't capture. Saves go to the
+// Apps Script web app in apps-script/manual-log.gs, which appends rows to the sheet.
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbyY-ApN-dtCe6cZCaMi0TskbTgBGZv_ruJ8VevWFbJC0L0jxQFsMKGfLX_2rL6U-VkZ/exec'; // paste the Apps Script web app URL (…/exec) here
+const MANUAL_EXERCISES = ['Romanian Deadlift', 'Single Leg Hip Thrust', 'Cable Face Pull', 'Cable Triceps Pressdown'];
+const PASSCODE_KEY = 'logPasscode';
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+function todayISO() {
+  const d = new Date();
+  return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function readPasscode() {
+  try { return localStorage.getItem(PASSCODE_KEY) || ''; } catch { return ''; }
+}
+
+function manualExercises(data) {
+  const logged = data.filter(r => r.file === 'manual').map(r => r.machine);
+  return [...new Set([...MANUAL_EXERCISES, ...logged])];
+}
+
+function buildLog(data) {
+  const options = manualExercises(data).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  return `
+  <div class="page fade-in" id="page-log">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Log a workout</span>
+        <span class="section-badge">free weights & cables</span>
+      </div>
+      <label class="log-label" for="log-exercise">Exercise</label>
+      <select class="styled-select" id="log-exercise" onchange="onLogExerciseChange()">
+        ${options}
+        <option value="__new__">Other…</option>
+      </select>
+      <input class="log-input" id="log-new-exercise" placeholder="Exercise name" style="display:none;margin-top:8px;">
+      <label class="log-label" for="log-date">Date</label>
+      <input class="log-input" type="date" id="log-date" value="${todayISO()}">
+      <label class="log-label">Sets</label>
+      <div class="set-row set-row-head"><span></span><span>Reps</span><span>kg</span><span></span></div>
+      <div id="log-sets"></div>
+      <div class="log-hint" id="log-prefill-hint"></div>
+      <button class="btn btn-ghost" onclick="addLogSet()">+ Add set</button>
+      <label class="log-label" for="log-passcode">Passcode</label>
+      <input class="log-input" type="password" id="log-passcode" value="${esc(readPasscode())}" autocomplete="current-password">
+      <button class="btn btn-primary" id="log-save" onclick="saveLog()">Save</button>
+      <div class="log-status" id="log-status"></div>
+    </div>
+  </div>`;
+}
+
+function setRowHTML(i, reps = '', weight = '') {
+  return `
+    <div class="set-row">
+      <span class="set-num">Set ${i + 1}</span>
+      <input class="log-input" type="number" inputmode="numeric" min="1" placeholder="12" value="${reps}">
+      <input class="log-input" type="number" inputmode="decimal" min="0" step="0.5" placeholder="BW" value="${weight}">
+      <button class="set-remove" onclick="removeLogSet(this)" aria-label="Remove set">×</button>
+    </div>`;
+}
+
+function renumberLogSets() {
+  document.querySelectorAll('#log-sets .set-num').forEach((el, i) => el.textContent = `Set ${i + 1}`);
+}
+
+function addLogSet() {
+  const rows = document.querySelectorAll('#log-sets .set-row');
+  const last = rows[rows.length - 1]?.querySelectorAll('input');
+  document.getElementById('log-sets').insertAdjacentHTML('beforeend',
+    setRowHTML(rows.length, last?.[0].value || '', last?.[1].value || ''));
+}
+
+function removeLogSet(btn) {
+  btn.closest('.set-row').remove();
+  renumberLogSets();
+}
+
+// Prefill with the most recent session of this exercise so you only edit what changed.
+function onLogExerciseChange() {
+  const exercise = document.getElementById('log-exercise').value;
+  document.getElementById('log-new-exercise').style.display = exercise === '__new__' ? 'block' : 'none';
+  const rows = allData.filter(r => r.machine === exercise);
+  const lastDate = rows.map(r => r.date).sort().pop();
+  const lastSets = rows.filter(r => r.date === lastDate).sort((a, b) => a.setNum - b.setNum);
+  const sets = lastSets.length ? lastSets.map(r => [r.reps, r.weight || '']) : [['', ''], ['', ''], ['', '']];
+  document.getElementById('log-sets').innerHTML = sets.map(([reps, kg], i) => setRowHTML(i, reps, kg)).join('');
+  document.getElementById('log-prefill-hint').textContent = lastDate ? `Prefilled from ${formatDateShort(lastDate)}` : '';
+}
+
+function setLogStatus(text, kind) {
+  const el = document.getElementById('log-status');
+  if (el) { el.textContent = text; el.className = `log-status ${kind || ''}`; }
+}
+
+async function saveLog() {
+  const picked = document.getElementById('log-exercise').value;
+  const exercise = (picked === '__new__' ? document.getElementById('log-new-exercise').value : picked).trim();
+  const date = document.getElementById('log-date').value;
+  const token = document.getElementById('log-passcode').value;
+  const sets = [...document.querySelectorAll('#log-sets .set-row')].map(row => {
+    const [reps, kg] = row.querySelectorAll('input');
+    return { reps: parseInt(reps.value) || 0, weight: parseFloat(kg.value) || 0 };
+  }).filter(s => s.reps > 0);
+
+  if (!LOG_URL) return setLogStatus('Logging isn\'t connected yet — LOG_URL is empty.', 'err');
+  if (!exercise) return setLogStatus('Pick or type an exercise.', 'err');
+  if (!date) return setLogStatus('Pick a date.', 'err');
+  if (!sets.length) return setLogStatus('Enter reps for at least one set.', 'err');
+  if (!token) return setLogStatus('Enter your passcode.', 'err');
+
+  const btn = document.getElementById('log-save');
+  btn.disabled = true;
+  setLogStatus('Saving…');
+  try {
+    // No Content-Type header: keeps this a "simple" request so Apps Script needs no CORS preflight.
+    const res = await fetch(LOG_URL, { method: 'POST', body: JSON.stringify({ token, date, exercise, sets }) });
+    const out = await res.json();
+    if (!out.ok) throw new Error(out.error || 'Save failed');
+    try { localStorage.setItem(PASSCODE_KEY, token); } catch {}
+    await refresh('log');
+    setLogStatus(`Saved ${sets.length} set${sets.length > 1 ? 's' : ''} of ${exercise}.`, 'ok');
+  } catch (e) {
+    btn.disabled = false;
+    setLogStatus(e.message, 'err');
+  }
+}
+
 function showPage(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach((el,i) => {
-    el.classList.toggle('active', ['overview','streak','progress','prs'][i] === page);
+    el.classList.toggle('active', ['overview','streak','progress','prs','log'][i] === page);
   });
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   const target = document.getElementById(`page-${page}`);
   if (target) {
     target.classList.add('active');
-    if (page === 'progress') setTimeout(updateCharts, 50);
+    if (page === 'progress') setTimeout(onMachineChange, 50);
   }
+}
+
+async function refresh(page) {
+  const rows = await fetchData();
+  allData = parseRows(rows);
+  const dates = getUniqueDates(allData);
+  const lastDate = dates[dates.length-1] || '';
+  document.getElementById('last-sync').textContent = `Last session: ${formatDate(lastDate)}`;
+  document.getElementById('app').innerHTML = `<main>${buildOverview(allData)}${buildProgress(allData)}${buildPRs(allData)}${buildStreak(allData)}${buildLog(allData)}</main>`;
+  onLogExerciseChange();
+  showPage(page);
 }
 
 async function init() {
   try {
-    const rows = await fetchData();
-    allData = parseRows(rows);
-    const dates = getUniqueDates(allData);
-    const lastDate = dates[dates.length-1] || '';
-    document.getElementById('last-sync').textContent = `Last session: ${formatDate(lastDate)}`;
-    document.getElementById('app').innerHTML = `<main>${buildOverview(allData)}${buildProgress(allData)}${buildPRs(allData)}${buildStreak(allData)}</main>`;
-    showPage('overview');
+    await refresh('overview');
   } catch(e) {
     document.getElementById('app').innerHTML = `
       <div class="loading">
