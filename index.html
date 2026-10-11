@@ -57,14 +57,17 @@
   .styled-select { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: 'Nunito', sans-serif; font-size: 15px; padding: 11px 14px; appearance: none; -webkit-appearance: none; cursor: pointer; }
 
   .pill-row { display: flex; gap: 6px; margin-bottom: 14px; }
-  .pill, .side-pill { flex: 1; text-align: center; padding: 7px 0; border-radius: 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; }
-  .pill.active, .side-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pill, .side-pill, .mode-pill { flex: 1; text-align: center; padding: 7px 0; border-radius: 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+  .pill.active, .side-pill.active, .mode-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   .pr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .pr-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; padding: 0 10px 12px; text-align: center; }
   .pr-table th:first-child { text-align: left; padding-left: 0; }
   .pr-table td { padding: 10px 8px; text-align: center; border-top: 1px solid var(--border); vertical-align: top; }
   .pr-table td:first-child { text-align: left; padding-left: 0; font-weight: 600; font-size: 14px; color: var(--text); }
+  .pr-table th.pr-col-num, .pr-table td.pr-col-num { text-align: right; padding-right: 0; }
+  .pr-table td.pr-col-num .pr-date { font-size: 13px; margin-top: 0; }
+  .pr-table td.pr-col-num { vertical-align: middle; }
   .pr-weight { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600; color: var(--accent); line-height: 1.1; }
   .pr-date { font-size: 12px; margin-top: 3px; font-weight: 500; }
   .pr-empty { color: var(--muted); font-size: 16px; }
@@ -735,84 +738,80 @@ function updateCharts() {
   renderCharts(labels, weightDatasets, volumeDatasets, unit);
 }
 
+// The PRs tab shows one mode at a time. Defaults to the mode of your latest eGym set
+// (manual free-weight rows have no mode, so they'd otherwise win on mixed days).
+let prMode = null;
+
+function prModes(data) {
+  const named = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
+  return data.some(r => !r.mode) ? named.concat(['__other__']) : named;
+}
+
 function buildPRs(data) {
-  const bests = computeSessionPRs(data);
-  const available = [...new Set(data.map(r => r.machine))];
-  const namedModes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
-  const modes = data.some(r => !r.mode) ? namedModes.concat(['__other__']) : namedModes;
-  const lower = m => m.toLowerCase();
-
-  const headerCells = modes.map(m => `<th>${modeLabel(m)}</th>`).join('');
-
-  function machineRows(machines) {
-    return machines
-      .filter(m => available.some(a => lower(a) === lower(m)))
-      .map(m => available.find(a => lower(a) === lower(m)))
-      .map(machine => {
-        const cells = modes.map(mode => {
-          const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
-          const pr = bests[key];
-          if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-          return `<td><div class="pr-weight">${formatSessionPR(pr)}${daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : ''}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
-        }).join('');
-        return `<tr><td>${machine}</td>${cells}</tr>`;
-      }).join('');
+  const modes = prModes(data);
+  if (!modes.includes(prMode)) {
+    const latest = data.filter(r => r.mode).sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+    prMode = latest ? latest.mode : modes[0];
   }
-
-  function categorySection(cat) {
-    const rows = machineRows(cat.machines);
-    if (!rows) return '';
-    return `
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">${cat.label}</span>
-          <span class="section-badge">best day · reps × kg</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="pr-table">
-            <thead><tr><th>Machine</th>${headerCells}</tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>`;
-  }
-
-  const knownMachines = MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower);
-  const otherMachines = available.filter(a => !knownMachines.includes(lower(a))).sort();
-  const otherRows = otherMachines.map(machine => {
-    const cells = modes.map(mode => {
-      const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
-      const pr = bests[key];
-      if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-      return `<td><div class="pr-weight">${formatSessionPR(pr)}${daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : ''}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
-    }).join('');
-    return `<tr><td>${machine}</td>${cells}</tr>`;
-  }).join('');
-  const otherSection = otherRows ? `
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">Other</span>
-          <span class="section-badge">best day · reps × kg</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="pr-table">
-            <thead><tr><th>Machine</th>${headerCells}</tr></thead>
-            <tbody>${otherRows}</tbody>
-          </table>
-        </div>
-      </div>` : '';
-
   return `
   <div class="page fade-in" id="page-prs">
+    <div class="pill-row">
+      ${modes.map(m => `<button class="mode-pill${m === prMode ? ' active' : ''}" data-mode="${m}" onclick="setPRMode('${m}')">${modeLabel(m)}</button>`).join('')}
+    </div>
     <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;padding:0 2px;">
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--fresh);display:inline-block"></span>&lt; 2 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--aging);display:inline-block"></span>2–4 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--plateau);display:inline-block"></span>&gt; 4 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="color:var(--aging)">★</span> last 7 days</div>
     </div>
-    ${MACHINE_CATEGORIES.map(categorySection).join('')}
-    ${otherSection}
+    <div id="pr-tables">${buildPRTables(data, prMode)}</div>
   </div>`;
+}
+
+function setPRMode(mode) {
+  prMode = mode;
+  document.querySelectorAll('.mode-pill').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
+  document.getElementById('pr-tables').innerHTML = buildPRTables(allData, mode);
+}
+
+function buildPRTables(data, mode) {
+  const bests = computeSessionPRs(data);
+  const modeKey = mode === '__other__' ? '' : mode;
+  const available = [...new Set(data.map(r => r.machine))];
+  const lower = m => m.toLowerCase();
+  const knownMachines = MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower);
+  const groups = [
+    ...MACHINE_CATEGORIES,
+    { label: 'Other', machines: available.filter(a => !knownMachines.includes(lower(a))).sort() },
+  ];
+
+  const sections = groups.map(group => {
+    const rows = group.machines
+      .map(m => available.find(a => lower(a) === lower(m)))
+      .filter(machine => machine && bests[`${machine}|${modeKey}`])
+      .map(machine => {
+        const pr = bests[`${machine}|${modeKey}`];
+        const star = daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : '';
+        return `<tr>
+          <td>${machine}</td>
+          <td class="pr-col-num"><div class="pr-weight">${formatSessionPR(pr)}${star}</div></td>
+          <td class="pr-col-num"><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>
+        </tr>`;
+      }).join('');
+    if (!rows) return '';
+    return `
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">${group.label}</span>
+          <span class="section-badge">best day · reps × kg</span>
+        </div>
+        <table class="pr-table">
+          <thead><tr><th>Machine</th><th class="pr-col-num">Best</th><th class="pr-col-num">Date</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+  return sections || `<div class="section" style="color:var(--muted);font-size:13px;">No PRs in this mode yet.</div>`;
 }
 
 // Manual logging for exercises the eGym armband doesn't capture. Saves go to the
