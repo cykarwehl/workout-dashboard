@@ -572,6 +572,13 @@ function buildMachineOptions(available) {
   return groups + (other ? `<optgroup label="Other">${other}</optgroup>` : '');
 }
 
+// Mode of the latest eGym set — the default filter on Progress and PRs. Manual
+// free-weight rows have no mode, so they'd otherwise win on mixed days.
+function latestMode(data) {
+  const latest = data.filter(r => r.mode).sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+  return latest ? latest.mode : '__other__';
+}
+
 function buildProgress(data) {
   const machines = [...new Set(data.map(r => r.machine))].sort();
   const modes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
@@ -580,7 +587,7 @@ function buildProgress(data) {
   <div class="page fade-in" id="page-progress">
     <div class="filter-row">
       <select class="styled-select" id="mode-select" onchange="updateCharts()">
-        ${modes.map(m => `<option value="${m}"${m === 'Adaptive' ? ' selected' : ''}>${m}</option>`).join('')}
+        ${modes.map(m => `<option value="${m}"${m === latestMode(data) ? ' selected' : ''}>${m}</option>`).join('')}
         ${hasOther ? `<option value="__other__">No mode</option>` : ''}
       </select>
       <select class="styled-select" id="machine-select" onchange="onMachineChange()">
@@ -735,8 +742,7 @@ function updateCharts() {
   renderCharts(labels, weightDatasets, volumeDatasets, unit);
 }
 
-// The PRs tab shows one mode at a time. Defaults to the mode of your latest eGym set
-// (manual free-weight rows have no mode, so they'd otherwise win on mixed days).
+// The PRs tab shows one mode at a time, starting on latestMode().
 let prMode = null;
 
 function prModes(data) {
@@ -746,10 +752,7 @@ function prModes(data) {
 
 function buildPRs(data) {
   const modes = prModes(data);
-  if (!modes.includes(prMode)) {
-    const latest = data.filter(r => r.mode).sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
-    prMode = latest ? latest.mode : modes[0];
-  }
+  if (!modes.includes(prMode)) prMode = modes.includes(latestMode(data)) ? latestMode(data) : modes[0];
   return `
   <div class="page fade-in" id="page-prs">
     <div class="pill-row">
