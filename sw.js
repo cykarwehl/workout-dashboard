@@ -1,4 +1,4 @@
-const CACHE = 'workout-dashboard-v5';
+const CACHE = 'workout-dashboard-v6';
 const APP_SHELL = [
   './',
   './index.html',

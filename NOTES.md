@@ -24,6 +24,14 @@ Written 2026-08-15. Read this before touching the project again after a long gap
    are ranked and charted by reps. The web app is deployed with access
    "Anyone", so every request must carry the passcode stored in Script
    Properties as `LOG_TOKEN` (also saved in the phone's localStorage).
+   One-sided exercises (`UNILATERAL` in `index.html`) are saved per side,
+   e.g. `Single Leg Hip Thrust (Left)`; "Both" sends one request per side.
+5. **Calories.** The app reads column I as calories per row. When the
+   screenshot importer starts capturing eGym calories (one number per
+   machine), it should write that number on set 1 only and leave the other
+   sets blank, or sessions get over-counted. Manual rows have no calories
+   column value; the app estimates them (`estimateSetCalories`) from reps,
+   kg and the body weight entered on the Log page (localStorage only).
 
 ## Security posture (checked 2026-08-15)
 

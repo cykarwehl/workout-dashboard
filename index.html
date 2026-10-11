@@ -57,8 +57,8 @@
   .styled-select { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: 'Nunito', sans-serif; font-size: 15px; padding: 11px 14px; appearance: none; -webkit-appearance: none; cursor: pointer; }
 
   .pill-row { display: flex; gap: 6px; margin-bottom: 14px; }
-  .pill { flex: 1; text-align: center; padding: 7px 0; border-radius: 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; }
-  .pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pill, .side-pill { flex: 1; text-align: center; padding: 7px 0; border-radius: 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+  .pill.active, .side-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   .pr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .pr-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; padding: 0 10px 12px; text-align: center; }
@@ -172,7 +172,7 @@
 <script>
 const SHEET_ID = '1l3J7Jedab0h9viwceYc8TQYp1yhylvOIkT_-Q_-L4pw';
 const API_KEY = 'AIzaSyALt9PbCeLs6Iqw8tfrL6GddCG5pUAIWH4';
-const RANGE = 'Sheet1!A:H';
+const RANGE = 'Sheet1!A:I';
 
 let allData = [];
 let currentPage = 'overview';
@@ -212,7 +212,8 @@ function parseRows(rows) {
     weight: parseFloat(row[4]) || 0,
     mode: normalizeMode(row[5]),
     isPR: ['true','yes','1'].includes((row[6] || '').toLowerCase()),
-    file: row[7] || ''
+    file: row[7] || '',
+    calories: parseFloat(row[8]) || 0 // column I; blank until the importer captures eGym calories
   })).filter(r => r.machine && r.date && (r.weight > 0 || r.reps > 0)); // weight 0 = bodyweight set
 }
 
@@ -440,6 +441,77 @@ function buildStreak(data) {
   </div>`;
 }
 
+// Calorie estimate for manually logged sets (eGym rows will carry their own calories in column I).
+// Two parts, both per set:
+//  - baseline: resistance-training MET 3.5 over the time under load (~3 s/rep),
+//    via the ACSM formula kcal/min = MET × 3.5 × bodyweight / 200
+//  - work: lifting load + the share of body mass the exercise moves through its
+//    range of motion, +30% for the lowering phase, at ~20% muscle efficiency
+const CALORIE_PROFILES = {
+  'Romanian Deadlift':       { bodyShare: 0.5, rom: 0.45 },
+  'Single Leg Hip Thrust':   { bodyShare: 0.5, rom: 0.3 },
+  'Cable Face Pull':         { bodyShare: 0,   rom: 0.4 },
+  'Cable Triceps Pressdown': { bodyShare: 0,   rom: 0.35 },
+};
+const DEFAULT_CALORIE_PROFILE = { bodyShare: 0.1, rom: 0.4 };
+const BODYWEIGHT_KEY = 'bodyWeight';
+
+function readBodyWeight() {
+  try { return parseFloat(localStorage.getItem(BODYWEIGHT_KEY)) || 0; } catch { return 0; }
+}
+
+function estimateSetCalories(r, bodyWeight) {
+  const { bodyShare, rom } = CALORIE_PROFILES[baseExercise(r.machine)] || DEFAULT_CALORIE_PROFILE;
+  const minutes = r.reps * 3 / 60;
+  const baseline = 3.5 * 3.5 * bodyWeight / 200 * minutes;
+  const joules = (r.weight + bodyShare * bodyWeight) * 9.81 * rom * r.reps * 1.3 / 0.2;
+  return baseline + joules / 4184;
+}
+
+// Recorded calories win; manual rows fall back to the estimate once a body weight is set.
+function setCalories(r, bodyWeight) {
+  if (r.calories > 0) return { kcal: r.calories, estimated: false };
+  if (r.file === 'manual' && bodyWeight > 0) return { kcal: estimateSetCalories(r, bodyWeight), estimated: true };
+  return null;
+}
+
+function buildCalories(data) {
+  const bodyWeight = readBodyWeight();
+  const sessions = {};
+  data.forEach(r => {
+    const c = setCalories(r, bodyWeight);
+    if (!c) return;
+    const s = sessions[r.date] ||= { kcal: 0, estimated: false, exercises: new Set() };
+    s.kcal += c.kcal;
+    s.estimated ||= c.estimated;
+    s.exercises.add(r.machine);
+  });
+  const list = Object.entries(sessions).sort(([a], [b]) => new Date(b) - new Date(a)).slice(0, 5);
+
+  const hasManual = data.some(r => r.file === 'manual');
+  const empty = !bodyWeight && hasManual
+    ? 'Add your body weight on the Log page to estimate calories.'
+    : 'No calorie data yet.';
+  const body = list.length ? list.map(([date, s]) => `
+      <div class="pr-feed-item">
+        <div class="pr-feed-info">
+          <div class="pr-feed-machine">${formatDate(date)}</div>
+          <div class="pr-feed-meta">${s.exercises.size} exercise${s.exercises.size > 1 ? 's' : ''}${s.estimated ? ' · estimated' : ''}</div>
+        </div>
+        <div class="pr-feed-weight">${s.estimated ? '≈ ' : ''}${Math.round(s.kcal)} kcal</div>
+      </div>`).join('')
+    : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">${empty}</div>`;
+
+  return `
+    <div class="section" id="calories-section">
+      <div class="section-header">
+        <span class="section-title">Calories burned</span>
+        <span class="section-badge">last 5 sessions</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
 function buildOverview(data) {
   const dates = getUniqueDates(data);
   const lastDate = dates[dates.length - 1] || '';
@@ -477,6 +549,7 @@ function buildOverview(data) {
       </div>
     </div>
     ${buildRecentPRs(data)}
+    ${buildCalories(data)}
     <div class="section">
       <div class="section-header">
         <span class="section-title">Gym visits per month</span>
@@ -513,7 +586,7 @@ function buildOverview(data) {
 const MACHINE_CATEGORIES = [
   { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pressdown', 'Cable Face Pull', 'Dumbbell Rows 1 Arm'] },
   { label: 'Core',       machines: ['Abdominal Crunch','Back Extension'] },
-  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust'] },
+  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust (Left)', 'Single Leg Hip Thrust (Right)'] },
 ];
 
 function buildMachineOptions(available) {
@@ -668,12 +741,12 @@ function renderCharts(labels, weightDatasets, volumeDatasets, unit) {
   const wCtx = document.getElementById('weightChart');
   if (wCtx) {
     if (weightChart) weightChart.destroy();
-    weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} ${unit}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>v+' '+unit}}} } });
+    weightChart = new Chart(wCtx, { type:'line', data:{ labels, datasets:weightDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} ${unit}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, precision:0, callback:v=>v+' '+unit}}} } });
   }
   const vCtx = document.getElementById('volumeChart');
   if (vCtx) {
     if (volumeChart) volumeChart.destroy();
-    volumeChart = new Chart(vCtx, { type:'bar', data:{ labels, datasets:volumeDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, callback:v=>Math.round(v)}}} } });
+    volumeChart = new Chart(vCtx, { type:'bar', data:{ labels, datasets:volumeDatasets }, options:{ ...baseOpts, plugins:{...baseOpts.plugins, tooltip:{...baseOpts.plugins.tooltip, callbacks:{label: ctx=>`${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}`}}}, scales:{...baseOpts.scales, y:{...baseOpts.scales.y, ticks:{...baseOpts.scales.y.ticks, precision:0}}} } });
   }
 }
 
@@ -782,6 +855,12 @@ function buildPRs(data) {
 const LOG_URL = 'https://script.google.com/macros/s/AKfycbyY-ApN-dtCe6cZCaMi0TskbTgBGZv_ruJ8VevWFbJC0L0jxQFsMKGfLX_2rL6U-VkZ/exec'; // paste the Apps Script web app URL (…/exec) here
 const MANUAL_EXERCISES = ['Romanian Deadlift', 'Single Leg Hip Thrust', 'Cable Face Pull', 'Cable Triceps Pressdown'];
 const PASSCODE_KEY = 'logPasscode';
+// One-sided exercises are stored per side, e.g. "Single Leg Hip Thrust (Left)".
+const UNILATERAL = ['Single Leg Hip Thrust'];
+const SIDES = ['Left', 'Right'];
+let logSide = 'both';
+
+const baseExercise = name => name.replace(/ \((Left|Right)\)$/, '');
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
@@ -795,7 +874,7 @@ function readPasscode() {
 }
 
 function manualExercises(data) {
-  const logged = data.filter(r => r.file === 'manual').map(r => r.machine);
+  const logged = data.filter(r => r.file === 'manual').map(r => baseExercise(r.machine));
   return [...new Set([...MANUAL_EXERCISES, ...logged])];
 }
 
@@ -814,6 +893,14 @@ function buildLog(data) {
         <option value="__new__">Other…</option>
       </select>
       <input class="log-input" id="log-new-exercise" placeholder="Exercise name" style="display:none;margin-top:8px;">
+      <div id="log-side-wrap" style="display:none;">
+        <label class="log-label">Side</label>
+        <div class="pill-row" style="margin-bottom:0;">
+          ${[['left', 'Left'], ['both', 'Both'], ['right', 'Right']].map(([v, l]) =>
+            `<button class="side-pill${v === logSide ? ' active' : ''}" data-side="${v}" onclick="setLogSide('${v}')">${l}</button>`).join('')}
+        </div>
+        <div class="log-hint">Both = same reps and kg saved for each leg.</div>
+      </div>
       <label class="log-label" for="log-date">Date</label>
       <input class="log-input" type="date" id="log-date" value="${todayISO()}">
       <label class="log-label">Sets</label>
@@ -821,6 +908,9 @@ function buildLog(data) {
       <div id="log-sets"></div>
       <div class="log-hint" id="log-prefill-hint"></div>
       <button class="btn btn-ghost" onclick="addLogSet()">+ Add set</button>
+      <label class="log-label" for="log-bodyweight">Body weight (kg)</label>
+      <input class="log-input" type="number" inputmode="decimal" min="0" step="0.1" id="log-bodyweight" value="${readBodyWeight() || ''}" placeholder="for calorie estimates" onchange="saveBodyWeight(this.value)">
+      <div class="log-hint">Only stored on this device.</div>
       <label class="log-label" for="log-passcode">Passcode</label>
       <input class="log-input" type="password" id="log-passcode" value="${esc(readPasscode())}" autocomplete="current-password">
       <button class="btn btn-primary" id="log-save" onclick="saveLog()">Save</button>
@@ -855,11 +945,31 @@ function removeLogSet(btn) {
   renumberLogSets();
 }
 
+function saveBodyWeight(value) {
+  try { localStorage.setItem(BODYWEIGHT_KEY, parseFloat(value) > 0 ? value : ''); } catch {}
+  const section = document.getElementById('calories-section');
+  if (section) section.outerHTML = buildCalories(allData);
+}
+
+function setLogSide(side) {
+  logSide = side;
+  document.querySelectorAll('.side-pill').forEach(el => el.classList.toggle('active', el.dataset.side === side));
+  onLogExerciseChange();
+}
+
+// The sheet names to write for the picked exercise: one per side for unilateral ones.
+function logTargets(exercise) {
+  if (!UNILATERAL.includes(exercise)) return [exercise];
+  const sides = logSide === 'both' ? SIDES : [logSide === 'left' ? 'Left' : 'Right'];
+  return sides.map(side => `${exercise} (${side})`);
+}
+
 // Prefill with the most recent session of this exercise so you only edit what changed.
 function onLogExerciseChange() {
   const exercise = document.getElementById('log-exercise').value;
   document.getElementById('log-new-exercise').style.display = exercise === '__new__' ? 'block' : 'none';
-  const rows = allData.filter(r => r.machine === exercise);
+  document.getElementById('log-side-wrap').style.display = UNILATERAL.includes(exercise) ? 'block' : 'none';
+  const rows = allData.filter(r => r.machine === logTargets(exercise)[0]);
   const lastDate = rows.map(r => r.date).sort().pop();
   const lastSets = rows.filter(r => r.date === lastDate).sort((a, b) => a.setNum - b.setNum);
   const sets = lastSets.length ? lastSets.map(r => [r.reps, r.weight || '']) : [['', ''], ['', ''], ['', '']];
@@ -892,13 +1002,19 @@ async function saveLog() {
   btn.disabled = true;
   setLogStatus('Saving…');
   try {
-    // No Content-Type header: keeps this a "simple" request so Apps Script needs no CORS preflight.
-    const res = await fetch(LOG_URL, { method: 'POST', body: JSON.stringify({ token, date, exercise, sets }) });
-    const out = await res.json();
-    if (!out.ok) throw new Error(out.error || 'Save failed');
+    const targets = logTargets(exercise);
+    for (const target of targets) {
+      // No Content-Type header: keeps this a "simple" request so Apps Script needs no CORS preflight.
+      const res = await fetch(LOG_URL, { method: 'POST', body: JSON.stringify({ token, date, exercise: target, sets }) });
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.error || `Save failed for ${target}`);
+    }
     try { localStorage.setItem(PASSCODE_KEY, token); } catch {}
     await refresh('log');
-    setLogStatus(`Saved ${sets.length} set${sets.length > 1 ? 's' : ''} of ${exercise}.`, 'ok');
+    const select = document.getElementById('log-exercise');
+    if ([...select.options].some(o => o.value === exercise)) { select.value = exercise; onLogExerciseChange(); }
+    const where = targets.length > 1 ? `${exercise}, each side` : targets[0];
+    setLogStatus(`Saved ${sets.length} set${sets.length > 1 ? 's' : ''} of ${where}.`, 'ok');
   } catch (e) {
     btn.disabled = false;
     setLogStatus(e.message, 'err');
