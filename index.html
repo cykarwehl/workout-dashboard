@@ -177,7 +177,7 @@ let allData = [];
 let currentPage = 'overview';
 let weightChart = null;
 let volumeChart = null;
-let selectedRange = 6;
+let selectedRange = 12;
 
 async function fetchData() {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
@@ -588,10 +588,7 @@ function buildProgress(data) {
       </select>
     </div>
     <div class="pill-row">
-      <button class="pill active" onclick="setRange(6,this)">6M</button>
-      <button class="pill" onclick="setRange(12,this)">12M</button>
-      <button class="pill" onclick="setRange(18,this)">18M</button>
-      <button class="pill" onclick="setRange(24,this)">24M</button>
+      ${[12, 18, 24].map(m => `<button class="pill${m === selectedRange ? ' active' : ''}" onclick="setRange(${m},this)">${m}M</button>`).join('')}
     </div>
     <div class="section">
       <div class="section-header">
