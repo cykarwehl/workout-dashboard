@@ -72,11 +72,7 @@
   .date-aging { color: var(--aging); }
   .date-plateau { color: var(--plateau); }
 
-  .pr-feed-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
-  .pr-feed-item:first-child { border-top: none; }
-  .pr-feed-machine { font-weight: 600; font-size: 14px; color: var(--text); }
-  .pr-feed-meta { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-  .pr-feed-weight { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: var(--accent); }
+  .pr-star { color: var(--aging); font-size: 16px; margin-left: 3px; vertical-align: 4px; }
 
   .year-nav-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--accent); width: 26px; height: 26px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
   .year-nav-btn:disabled { opacity: 0.3; cursor: default; }
@@ -251,32 +247,9 @@ function getUniqueDates(data) {
   return [...new Set(data.map(r => r.date))].sort();
 }
 
-// Heavier always wins; between bodyweight sets (0 kg), more reps wins.
-function beatsPR(r, prev) {
-  if (!prev) return true;
-  if (r.weight !== prev.weight) return r.weight > prev.weight;
-  return r.weight === 0 && r.reps > prev.reps;
-}
-
-function formatLoad(r) {
-  return r.weight > 0 ? `${r.weight} kg` : `${r.reps} reps`;
-}
-
-function computePRs(data) {
-  const bests = {};
-  const sorted = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
-  sorted.forEach(r => {
-    const key = `${r.machine}|${r.mode}`;
-    if (beatsPR(r, bests[key])) {
-      bests[key] = { weight: r.weight, reps: r.reps, date: r.date, machine: r.machine, mode: r.mode };
-    }
-  });
-  return bests;
-}
-
 // A session PR = the most reps × kg on one machine (per mode) in a single day.
 // Bodyweight sessions (0 kg) compare by total reps instead.
-function computeSessionPRAchievements(data) {
+function computeSessionPRs(data) {
   const sessions = {};
   data.forEach(r => {
     const s = sessions[`${r.date}|${r.machine}|${r.mode}`] ||= { date: r.date, machine: r.machine, mode: r.mode, volume: 0, reps: 0 };
@@ -284,28 +257,18 @@ function computeSessionPRAchievements(data) {
     s.reps += r.reps;
   });
   const bests = {};
-  const achievements = [];
   Object.values(sessions).sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(s => {
     const key = `${s.machine}|${s.mode}`;
     const prev = bests[key];
-    const better = !prev || s.volume > prev.volume || (s.volume === 0 && prev.volume === 0 && s.reps > prev.reps);
-    if (better) {
-      bests[key] = s;
-      achievements.push({ ...s, prev });
-    }
+    if (!prev || s.volume > prev.volume || (s.volume === 0 && prev.volume === 0 && s.reps > prev.reps)) bests[key] = s;
   });
-  return achievements;
+  return bests;
 }
 
 function formatSessionPR(s) {
   return s.volume > 0 ? `${formatVolume(s.volume)} kg` : `${s.reps} reps`;
 }
 
-function sessionPRGain(s) {
-  if (!s.prev) return 'first session';
-  const [now, before] = s.volume > 0 ? [s.volume, s.prev.volume] : [s.reps, s.prev.reps];
-  return before > 0 ? `+${Math.round((now - before) / before * 100)}%` : 'new best';
-}
 
 function filterByRange(data, months) {
   const cutoff = new Date();
@@ -352,30 +315,6 @@ function computeStreak(dates) {
   return { streak, thisWeekCount };
 }
 
-function buildRecentPRs(data) {
-  const list = computeSessionPRAchievements(data)
-    .filter(r => daysSince(r.date) <= 7)
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const body = list.length ? list.map(r => `
-      <div class="pr-feed-item">
-        <div class="pr-feed-info">
-          <div class="pr-feed-machine">${r.machine}</div>
-          <div class="pr-feed-meta">${modeLabel(r.mode || '__other__')} · ${formatDateShort(r.date)} · ${sessionPRGain(r)}</div>
-        </div>
-        <div class="pr-feed-weight">${formatSessionPR(r)}</div>
-      </div>`).join('')
-    : `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No PRs yet in the last 7 days.</div>`;
-
-  return `
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">Recent PRs</span>
-        <span class="section-badge">reps × kg · last 7 days</span>
-      </div>
-      ${body}
-    </div>`;
-}
 
 function weeksInYear(year) {
   let d = getWeekKey(new Date(year, 0, 1));
@@ -574,7 +513,6 @@ function buildOverview(data) {
         <div class="kpi-sub">last trained ${lastDate ? formatDate(lastDate) : '—'}</div>
       </div>
     </div>
-    ${buildRecentPRs(data)}
     <div class="section">
       <div class="section-header">
         <span class="section-title">Gym visits per month</span>
@@ -798,7 +736,7 @@ function updateCharts() {
 }
 
 function buildPRs(data) {
-  const bests = computePRs(data);
+  const bests = computeSessionPRs(data);
   const available = [...new Set(data.map(r => r.machine))];
   const namedModes = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
   const modes = data.some(r => !r.mode) ? namedModes.concat(['__other__']) : namedModes;
@@ -815,7 +753,7 @@ function buildPRs(data) {
           const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
           const pr = bests[key];
           if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-          return `<td><div class="pr-weight">${formatLoad(pr)}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
+          return `<td><div class="pr-weight">${formatSessionPR(pr)}${daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : ''}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
         }).join('');
         return `<tr><td>${machine}</td>${cells}</tr>`;
       }).join('');
@@ -828,7 +766,7 @@ function buildPRs(data) {
       <div class="section">
         <div class="section-header">
           <span class="section-title">${cat.label}</span>
-          <span class="section-badge">per mode</span>
+          <span class="section-badge">best day · reps × kg</span>
         </div>
         <div style="overflow-x:auto;">
           <table class="pr-table">
@@ -846,7 +784,7 @@ function buildPRs(data) {
       const key = mode === '__other__' ? `${machine}|` : `${machine}|${mode}`;
       const pr = bests[key];
       if (!pr) return `<td><span class="pr-empty">—</span></td>`;
-      return `<td><div class="pr-weight">${formatLoad(pr)}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
+      return `<td><div class="pr-weight">${formatSessionPR(pr)}${daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : ''}</div><div class="pr-date ${dateClass(pr.date)}">${formatDateShort(pr.date)}</div></td>`;
     }).join('');
     return `<tr><td>${machine}</td>${cells}</tr>`;
   }).join('');
@@ -854,7 +792,7 @@ function buildPRs(data) {
       <div class="section">
         <div class="section-header">
           <span class="section-title">Other</span>
-          <span class="section-badge">per mode</span>
+          <span class="section-badge">best day · reps × kg</span>
         </div>
         <div style="overflow-x:auto;">
           <table class="pr-table">
@@ -870,6 +808,7 @@ function buildPRs(data) {
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--fresh);display:inline-block"></span>&lt; 2 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--aging);display:inline-block"></span>2–4 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--plateau);display:inline-block"></span>&gt; 4 weeks</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="color:var(--aging)">★</span> last 7 days</div>
     </div>
     ${MACHINE_CATEGORIES.map(categorySection).join('')}
     ${otherSection}
