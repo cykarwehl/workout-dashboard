@@ -413,6 +413,9 @@ const CALORIE_PROFILES = {
   'Single Leg Hip Thrust':   { bodyShare: 0.5, rom: 0.3 },
   'Cable Face Pull':         { bodyShare: 0,   rom: 0.4 },
   'Cable Triceps Pressdown': { bodyShare: 0,   rom: 0.35 },
+  'Squat':                   { bodyShare: 0.85, rom: 0.4 },
+  'Lunge':                   { bodyShare: 0.85, rom: 0.35 },
+  'Lateral Raise':           { bodyShare: 0.05, rom: 0.5 },
 };
 const DEFAULT_CALORIE_PROFILE = { bodyShare: 0.1, rom: 0.4 };
 const BODYWEIGHT_KEY = 'bodyWeight';
@@ -551,9 +554,9 @@ function buildOverview(data) {
 }
 
 const MACHINE_CATEGORIES = [
-  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pressdown', 'Cable Face Pull', 'Dumbbell Rows 1 Arm'] },
+  { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pressdown', 'Cable Face Pull', 'Dumbbell Rows 1 Arm', 'Lateral Raise (Left)', 'Lateral Raise (Right)'] },
   { label: 'Core',       machines: ['Abdominal Crunch','Back Extension'] },
-  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust (Left)', 'Single Leg Hip Thrust (Right)'] },
+  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust (Left)', 'Single Leg Hip Thrust (Right)', 'Squat', 'Lunge'] },
 ];
 
 function buildMachineOptions(available) {
@@ -817,10 +820,10 @@ function buildPRTables(data, mode) {
 // Manual logging for exercises the eGym armband doesn't capture. Saves go to the
 // Apps Script web app in apps-script/manual-log.gs, which appends rows to the sheet.
 const LOG_URL = 'https://script.google.com/macros/s/AKfycbyY-ApN-dtCe6cZCaMi0TskbTgBGZv_ruJ8VevWFbJC0L0jxQFsMKGfLX_2rL6U-VkZ/exec'; // paste the Apps Script web app URL (…/exec) here
-const MANUAL_EXERCISES = ['Romanian Deadlift', 'Single Leg Hip Thrust', 'Cable Face Pull', 'Cable Triceps Pressdown'];
+const MANUAL_EXERCISES = ['Romanian Deadlift', 'Single Leg Hip Thrust', 'Squat', 'Lunge', 'Lateral Raise', 'Cable Face Pull', 'Cable Triceps Pressdown'];
 const PASSCODE_KEY = 'logPasscode';
 // One-sided exercises are stored per side, e.g. "Single Leg Hip Thrust (Left)".
-const UNILATERAL = ['Single Leg Hip Thrust'];
+const UNILATERAL = ['Single Leg Hip Thrust', 'Lateral Raise'];
 const SIDES = ['Left', 'Right'];
 let logSide = 'both';
 
@@ -863,7 +866,7 @@ function buildLog(data) {
           ${[['left', 'Left'], ['both', 'Both'], ['right', 'Right']].map(([v, l]) =>
             `<button class="side-pill${v === logSide ? ' active' : ''}" data-side="${v}" onclick="setLogSide('${v}')">${l}</button>`).join('')}
         </div>
-        <div class="log-hint">Both = same reps and kg saved for each leg.</div>
+        <div class="log-hint">Both = same reps and kg saved for each side.</div>
       </div>
       <label class="log-label" for="log-date">Date</label>
       <input class="log-input" type="date" id="log-date" value="${todayISO()}">
