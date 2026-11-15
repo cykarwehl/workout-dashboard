@@ -99,6 +99,9 @@
   .spinner { width: 32px; height: 32px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  .cal-avg { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .cal-avg-val { font-family: 'Cormorant Garamond', serif; font-size: 34px; font-weight: 600; line-height: 1; color: var(--accent); }
+  .cal-avg-sub { font-size: 13px; color: var(--muted); }
   .month-bars { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding-top: 20px; }
   .month-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .month-bar { width: 100%; background: var(--accent-light); border-radius: 4px 4px 0 0; position: relative; min-height: 4px; transition: height 0.6s ease; }
@@ -442,6 +445,7 @@ function setCalories(r, bodyWeight) {
 function buildCalories(data) {
   const bodyWeight = readBodyWeight();
   const kcalMap = {};
+  const sessionKcal = {}; // date → kcal, only for sessions that have any calorie data
   let estimated = false, recorded = false;
   data.forEach(r => {
     const c = setCalories(r, bodyWeight);
@@ -449,6 +453,7 @@ function buildCalories(data) {
     if (!c || !dt) return;
     const key = dt.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
     kcalMap[key] = (kcalMap[key] || 0) + c.kcal;
+    sessionKcal[r.date] = (sessionKcal[r.date] || 0) + c.kcal;
     estimated ||= c.estimated;
     recorded ||= !c.estimated;
   });
@@ -461,7 +466,13 @@ function buildCalories(data) {
   const empty = !bodyWeight && data.some(r => r.file === 'manual')
     ? 'Add your body weight on the Log page to estimate calories.'
     : 'No calorie data yet.';
+  const sessionTotals = Object.values(sessionKcal);
+  const avgKcal = sessionTotals.length ? sessionTotals.reduce((a, b) => a + b, 0) / sessionTotals.length : 0;
   const body = Object.keys(kcalMap).length ? `
+      <div class="cal-avg">
+        <span class="cal-avg-val">${Math.round(avgKcal)}</span>
+        <span class="cal-avg-sub">kcal avg per session · ${sessionTotals.length} session${sessionTotals.length === 1 ? '' : 's'}</span>
+      </div>
       <div class="month-bars">
         ${months.map(label => `
           <div class="month-col">
