@@ -77,9 +77,16 @@
 
   .view-toggle { background: var(--surface2); border-radius: 22px; padding: 3px; gap: 3px; }
   .view-toggle .pill { border: none; padding: 6px 0; }
+  /* Four columns on a phone: fixed layout keeps the table inside the card. */
+  .bal-table { table-layout: fixed; }
+  .bal-table th, .bal-table td { padding-left: 3px; padding-right: 3px; letter-spacing: 0.3px; }
   .bal-table td { vertical-align: top; }
+  .bal-table th:first-child, .bal-table td:first-child { width: 31%; padding-left: 0; }
+  .bal-table td:first-child { font-size: 13px; overflow-wrap: anywhere; }
+  .bal-table th:last-child, .bal-table td:last-child { padding-right: 0; }
+  .bal-table .pr-weight { font-size: 22px; }
   .bal-table th.bal-base { color: var(--accent); }
-  .bal-sub { font-size: 12px; margin-top: 2px; font-weight: 600; white-space: nowrap; }
+  .bal-sub { font-size: 11px; margin-top: 2px; font-weight: 600; line-height: 1.3; }
   .bal-ok { color: var(--success); }
   .bal-warn { color: var(--aging); }
   .bal-off { color: var(--plateau); }
@@ -909,8 +916,7 @@ function balanceCell(entry, bm, base, baseEntry) {
     const diff = entry.weight - target;
     const off = Math.abs(diff) / target;
     const cls = off <= BALANCE_OK ? 'bal-ok' : off <= BALANCE_WARN ? 'bal-warn' : 'bal-off';
-    const sign = diff >= 0 ? '+' : '−';
-    sub = `<div class="bal-sub ${cls}">→ ${fmtKg(target)} · ${sign}${fmtKg(Math.abs(diff))}</div>`;
+    sub = `<div class="bal-sub ${cls}">→ ${fmtKg(target)}</div>`;
   }
   return `<td><div class="pr-weight">${fmtKg(entry.weight)}</div>${sub}${date}</td>`;
 }
