@@ -75,6 +75,15 @@
   .date-aging { color: var(--aging); }
   .date-plateau { color: var(--plateau); }
 
+  .view-toggle { background: var(--surface2); border-radius: 22px; padding: 3px; gap: 3px; }
+  .view-toggle .pill { border: none; padding: 6px 0; }
+  .bal-table td { vertical-align: top; }
+  .bal-table th.bal-base { color: var(--accent); }
+  .bal-sub { font-size: 12px; margin-top: 2px; font-weight: 600; white-space: nowrap; }
+  .bal-ok { color: var(--success); }
+  .bal-warn { color: var(--aging); }
+  .bal-off { color: var(--plateau); }
+  .bal-note { font-size: 13px; color: var(--muted); margin: 0 2px 12px; line-height: 1.4; }
   .pr-star { color: var(--aging); font-size: 16px; margin-left: 3px; vertical-align: 4px; }
 
   .year-nav-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--accent); width: 26px; height: 26px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
@@ -758,6 +767,8 @@ function updateCharts() {
 
 // The PRs tab shows one mode at a time, starting on latestMode().
 let prMode = null;
+let prView = 'best';     // 'best' (session PRs) or 'balance' (mode-vs-mode check)
+let balanceBase = null;  // which mode's weight the Balance view treats as the reference
 
 function prModes(data) {
   const named = [...new Set(data.map(r => r.mode))].filter(Boolean).sort();
@@ -767,9 +778,23 @@ function prModes(data) {
 function buildPRs(data) {
   const modes = prModes(data);
   if (!modes.includes(prMode)) prMode = modes.includes(latestMode(data)) ? latestMode(data) : modes[0];
+  if (!BALANCE_MODES.some(b => b.key === balanceBase)) {
+    balanceBase = (BALANCE_MODES.find(b => b.match(latestMode(data))) || BALANCE_MODES[0]).key;
+  }
   return `
   <div class="page fade-in" id="page-prs">
-    <div class="pill-row">
+    <div class="pill-row view-toggle">
+      ${[['best', 'Best'], ['balance', 'Balance']].map(([v, label]) =>
+        `<button class="pill${v === prView ? ' active' : ''}" data-view="${v}" onclick="setPRView('${v}')">${label}</button>`).join('')}
+    </div>
+    <div id="pr-view-balance" style="display:${prView === 'balance' ? 'block' : 'none'}">
+      <div class="pill-row" id="balance-base-pills">
+        ${BALANCE_MODES.map(b => `<button class="mode-pill${b.key === balanceBase ? ' active' : ''}" data-mode="${b.key}" onclick="setBalanceBase('${b.key}')">${b.key}</button>`).join('')}
+      </div>
+      <div id="balance-tables">${buildBalanceTables(data, balanceBase)}</div>
+    </div>
+    <div id="pr-view-best" style="display:${prView === 'best' ? 'block' : 'none'}">
+    <div class="pill-row" id="pr-mode-pills">
       ${modes.map(m => `<button class="mode-pill${m === prMode ? ' active' : ''}" data-mode="${m}" onclick="setPRMode('${m}')">${modeLabel(m)}</button>`).join('')}
     </div>
     <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;padding:0 2px;">
@@ -779,30 +804,45 @@ function buildPRs(data) {
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="color:var(--aging)">★</span> last 7 days</div>
     </div>
     <div id="pr-tables">${buildPRTables(data, prMode)}</div>
+    </div>
   </div>`;
+}
+
+function setPRView(view) {
+  prView = view;
+  document.querySelectorAll('.view-toggle .pill').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+  document.getElementById('pr-view-best').style.display = view === 'best' ? 'block' : 'none';
+  document.getElementById('pr-view-balance').style.display = view === 'balance' ? 'block' : 'none';
 }
 
 function setPRMode(mode) {
   prMode = mode;
-  document.querySelectorAll('.mode-pill').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
+  document.querySelectorAll('#pr-mode-pills .mode-pill').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
   document.getElementById('pr-tables').innerHTML = buildPRTables(allData, mode);
+}
+
+// MACHINE_CATEGORIES order, with anything unlisted under "Other". Machine names
+// are returned as spelled in the data.
+function groupMachines(available) {
+  const lower = m => m.toLowerCase();
+  const knownMachines = MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower);
+  return [
+    ...MACHINE_CATEGORIES,
+    { label: 'Other', machines: available.filter(a => !knownMachines.includes(lower(a))).sort() },
+  ].map(group => ({
+    label: group.label,
+    machines: group.machines.map(m => available.find(a => lower(a) === lower(m))).filter(Boolean),
+  }));
 }
 
 function buildPRTables(data, mode) {
   const bests = computeSessionPRs(data);
   const modeKey = mode === '__other__' ? '' : mode;
-  const available = [...new Set(data.map(r => r.machine))];
-  const lower = m => m.toLowerCase();
-  const knownMachines = MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower);
-  const groups = [
-    ...MACHINE_CATEGORIES,
-    { label: 'Other', machines: available.filter(a => !knownMachines.includes(lower(a))).sort() },
-  ];
+  const groups = groupMachines([...new Set(data.map(r => r.machine))]);
 
   const sections = groups.map(group => {
     const rows = group.machines
-      .map(m => available.find(a => lower(a) === lower(m)))
-      .filter(machine => machine && bests[`${machine}|${modeKey}`])
+      .filter(machine => bests[`${machine}|${modeKey}`])
       .map(machine => {
         const pr = bests[`${machine}|${modeKey}`];
         const star = daysSince(pr.date) <= 7 ? '<span class="pr-star" title="PR in the last 7 days">★</span>' : '';
@@ -826,6 +866,91 @@ function buildPRTables(data, mode) {
       </div>`;
   }).join('');
   return sections || `<div class="section" style="color:var(--muted);font-size:13px;">No PRs in this mode yet.</div>`;
+}
+
+// Balance view: is each machine's weight in line across modes? The training
+// program sets each mode as a share of max strength. The chosen base mode's
+// latest weight implies a max, which gives a target for the other two modes.
+const BALANCE_MODES = [
+  { key: 'Eccentric',  pct: 0.45, match: m => m === 'Eccentric' },
+  { key: 'Adaptive',   pct: 0.68, match: m => /adaptiv/i.test(m) },
+  { key: 'Isokinetic', pct: 0.73, match: m => /isokinet/i.test(m) },
+];
+const BALANCE_OK = 0.05;   // within ±5% of target counts as on track
+const BALANCE_WARN = 0.10; // ±5–10% is worth a look; beyond that is off
+
+// machine → mode key → heaviest set of the latest session in that mode
+function balanceSnapshot(data) {
+  const out = {};
+  data.forEach(r => {
+    if (!(r.weight > 0)) return;
+    const bm = BALANCE_MODES.find(b => b.match(r.mode));
+    const dt = parseDate(r.date);
+    if (!bm || !dt) return;
+    const t = dt.getTime();
+    const modes = (out[r.machine] ||= {});
+    const cur = modes[bm.key];
+    if (!cur || t > cur.t) modes[bm.key] = { t, date: r.date, weight: r.weight };
+    else if (t === cur.t && r.weight > cur.weight) cur.weight = r.weight;
+  });
+  return out;
+}
+
+const fmtKg = v => String(Math.round(v * 10) / 10);
+
+function balanceCell(entry, bm, base, baseEntry) {
+  if (!entry) return '<td><span class="pr-empty">—</span></td>';
+  const date = `<div class="pr-date ${dateClass(entry.date)}">${formatDateShort(entry.date)}</div>`;
+  let sub = '';
+  if (bm.key === base.key) {
+    sub = `<div class="bal-sub" style="color:var(--muted)">max ≈ ${fmtKg(entry.weight / base.pct)}</div>`;
+  } else if (baseEntry) {
+    const target = baseEntry.weight / base.pct * bm.pct;
+    const diff = entry.weight - target;
+    const off = Math.abs(diff) / target;
+    const cls = off <= BALANCE_OK ? 'bal-ok' : off <= BALANCE_WARN ? 'bal-warn' : 'bal-off';
+    const sign = diff >= 0 ? '+' : '−';
+    sub = `<div class="bal-sub ${cls}">→ ${fmtKg(target)} · ${sign}${fmtKg(Math.abs(diff))}</div>`;
+  }
+  return `<td><div class="pr-weight">${fmtKg(entry.weight)}</div>${sub}${date}</td>`;
+}
+
+function buildBalanceTables(data, baseKey) {
+  const base = BALANCE_MODES.find(b => b.key === baseKey);
+  const snap = balanceSnapshot(data);
+  const groups = groupMachines(Object.keys(snap));
+  const head = BALANCE_MODES.map(b => `<th class="${b.key === base.key ? 'bal-base' : ''}">${b.key.slice(0, 3)}</th>`).join('');
+
+  const sections = groups.map(group => {
+    const rows = group.machines.map(machine => {
+      const modes = snap[machine];
+      const cells = BALANCE_MODES.map(bm => balanceCell(modes[bm.key], bm, base, modes[base.key])).join('');
+      return `<tr><td>${machine}</td>${cells}</tr>`;
+    }).join('');
+    if (!rows) return '';
+    return `
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">${group.label}</span>
+          <span class="section-badge">kg · latest session</span>
+        </div>
+        <table class="pr-table bal-table">
+          <thead><tr><th>Machine</th>${head}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  const pcts = BALANCE_MODES.map(b => `${b.key} ${Math.round(b.pct * 100)}%`).join(' · ');
+  const note = `<div class="bal-note">Targets assume your latest ${base.key} weight is ${Math.round(base.pct * 100)}% of max (${pcts}).
+    <span class="bal-ok">Green</span> within ±${BALANCE_OK * 100}%, <span class="bal-warn">amber</span> within ±${BALANCE_WARN * 100}%, <span class="bal-off">red</span> beyond.</div>`;
+  return note + (sections || `<div class="section" style="color:var(--muted);font-size:13px;">No Eccentric, Adaptive or Isokinetic sessions yet.</div>`);
+}
+
+function setBalanceBase(key) {
+  balanceBase = key;
+  document.querySelectorAll('#balance-base-pills .mode-pill').forEach(el => el.classList.toggle('active', el.dataset.mode === key));
+  document.getElementById('balance-tables').innerHTML = buildBalanceTables(allData, key);
 }
 
 // Manual logging for exercises the eGym armband doesn't capture. Saves go to the
