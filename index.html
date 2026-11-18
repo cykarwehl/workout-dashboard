@@ -75,6 +75,8 @@
   .date-aging { color: var(--aging); }
   .date-plateau { color: var(--plateau); }
 
+  /* PRs page: toggle, chips and explanation stay pinned under the topbar while the tables scroll. */
+  .pr-sticky { position: sticky; top: var(--topbar-h, 78px); z-index: 50; background: var(--bg); margin: -16px -20px 14px; padding: 16px 20px 2px; border-bottom: 1px solid var(--border); }
   .view-toggle { background: var(--surface2); border-radius: 22px; padding: 3px; gap: 3px; }
   .view-toggle .pill { border: none; padding: 6px 0; }
   /* Four columns on a phone: fixed layout keeps the table inside the card. */
@@ -88,7 +90,6 @@
   .bal-table th.bal-base { color: var(--accent); }
   .bal-sub { font-size: 11px; margin-top: 2px; font-weight: 600; line-height: 1.3; }
   .bal-ok { color: var(--success); }
-  .bal-warn { color: var(--aging); }
   .bal-off { color: var(--plateau); }
   .bal-note { font-size: 13px; color: var(--muted); margin: 0 2px 12px; line-height: 1.4; }
   .pr-star { color: var(--aging); font-size: 16px; margin-left: 3px; vertical-align: 4px; }
@@ -101,6 +102,7 @@
   .streak-circle { width: 20px; height: 20px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border2); flex-shrink: 0; }
   .streak-circle.floor { background: var(--accent); border-color: var(--accent); }
   .streak-circle.goal { background: var(--success); border-color: var(--success); }
+  .streak-circle.current { outline: 2px dotted var(--text); outline-offset: 2px; }
   .streak-circle.future { background: transparent; border: 1px dashed var(--border2); opacity: 0.5; }
 
   .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(248,247,255,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 10px 0 20px; z-index: 100; }
@@ -193,6 +195,14 @@ const API_KEY = 'AIzaSyALt9PbCeLs6Iqw8tfrL6GddCG5pUAIWH4';
 const RANGE = 'Sheet1!A:I';
 
 let allData = [];
+
+// The PRs page header pins just below the topbar, whose height varies by device.
+function syncTopbarHeight() {
+  const bar = document.querySelector('.topbar');
+  if (bar) document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncTopbarHeight);
+window.addEventListener('load', syncTopbarHeight);
 let currentPage = 'overview';
 let weightChart = null;
 let volumeChart = null;
@@ -365,12 +375,17 @@ function buildStreakYearGrid(data, year) {
   const todayWeekStart = getWeekKey(new Date()).getTime();
 
   return weeks.map((monday, i) => {
-    const isFirstOfMonth = i === 0 || monday.getMonth() !== weeks[i - 1].getMonth();
-    const label = isFirstOfMonth ? monday.toLocaleDateString('en-GB', { month: 'short' }) : '';
+    // Label the week that contains the 1st of a month (i.e. its Sunday is in a new month).
+    const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+    const prevSunday = new Date(monday); prevSunday.setDate(prevSunday.getDate() - 1);
+    const startsMonth = sunday.getMonth() !== prevSunday.getMonth() && sunday.getFullYear() === year;
+    const label = i === 0 ? monday.toLocaleDateString('en-GB', { month: 'short' })
+      : startsMonth ? sunday.toLocaleDateString('en-GB', { month: 'short' }) : '';
     const count = weekCounts[monday.getTime()] || 0;
     const tier = weekTier(count, monday.getTime() > todayWeekStart);
-    const title = `${formatDateShort(monday.toISOString().slice(0, 10))}: ${count} session${count === 1 ? '' : 's'}`;
-    return `<div class="streak-week"><div class="streak-month-label">${label}</div><div class="streak-circle ${tier}" title="${title}"></div></div>`;
+    const isCurrent = monday.getTime() === todayWeekStart;
+    const title = `${isCurrent ? 'This week' : 'Week of ' + formatDateShort(monday)}: ${count} session${count === 1 ? '' : 's'}`;
+    return `<div class="streak-week"><div class="streak-month-label">${label}</div><div class="streak-circle ${tier}${isCurrent ? ' current' : ''}" title="${title}"></div></div>`;
   }).join('');
 }
 
@@ -583,11 +598,17 @@ function buildOverview(data) {
 const MACHINE_CATEGORIES = [
   { label: 'Upper Body', machines: ['Biceps Curl','Butterfly','Chest Press','Lat Pulldown','Reverse Butterfly','Seated Row','Shoulder Press','Triceps', 'Dumbbell Incline Press', 'Dumbbell Flys Incline', 'Dumbbell Lateral Raises', 'Cable Triceps Pressdown', 'Cable Face Pull', 'Dumbbell Rows 1 Arm', 'Lateral Raise (Left)', 'Lateral Raise (Right)'] },
   { label: 'Core',       machines: ['Abdominal Crunch','Back Extension'] },
-  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Romanian Deadlift', 'Single Leg Hip Thrust (Left)', 'Single Leg Hip Thrust (Right)', 'Squat', 'Lunge'] },
+  { label: 'Lower Body', machines: ['Leg Curl','Leg Extension','Leg Press', 'Barbell Hip Thrusts', 'Lunges Alternating', 'Cable Romanian Deadlift', 'Cable Hip Abduction', 'Kettleball Front Squat', 'Abductor', 'Adductor', 'Romanian Deadlift', 'Single Leg Hip Thrust (Left)', 'Single Leg Hip Thrust (Right)', 'Squat', 'Lunge'] },
 ];
+
+// Machines the gym no longer has: hidden from the Progress and PRs lists, but
+// their old sets still count toward volume, calories and visits.
+const RETIRED_MACHINES = ['Rotary Torso'];
+const isActiveMachine = m => !RETIRED_MACHINES.some(r => r.toLowerCase() === m.toLowerCase());
 
 function buildMachineOptions(available) {
   const lower = m => m.toLowerCase();
+  available = available.filter(isActiveMachine);
   const groups = MACHINE_CATEGORIES.map(cat => {
     const opts = cat.machines
       .filter(m => available.some(a => lower(a) === lower(m)))
@@ -790,27 +811,34 @@ function buildPRs(data) {
   }
   return `
   <div class="page fade-in" id="page-prs">
-    <div class="pill-row view-toggle">
-      ${[['best', 'Best'], ['balance', 'Balance']].map(([v, label]) =>
-        `<button class="pill${v === prView ? ' active' : ''}" data-view="${v}" onclick="setPRView('${v}')">${label}</button>`).join('')}
-    </div>
-    <div id="pr-view-balance" style="display:${prView === 'balance' ? 'block' : 'none'}">
-      <div class="pill-row" id="balance-base-pills">
-        ${BALANCE_MODES.map(b => `<button class="mode-pill${b.key === balanceBase ? ' active' : ''}" data-mode="${b.key}" onclick="setBalanceBase('${b.key}')">${b.key}</button>`).join('')}
+    <div class="pr-sticky">
+      <div class="pill-row view-toggle">
+        ${[['best', 'Best'], ['balance', 'Balance']].map(([v, label]) =>
+          `<button class="pill${v === prView ? ' active' : ''}" data-view="${v}" onclick="setPRView('${v}')">${label}</button>`).join('')}
       </div>
-      <div id="balance-tables">${buildBalanceTables(data, balanceBase)}</div>
-    </div>
-    <div id="pr-view-best" style="display:${prView === 'best' ? 'block' : 'none'}">
-    <div class="pill-row" id="pr-mode-pills">
-      ${modes.map(m => `<button class="mode-pill${m === prMode ? ' active' : ''}" data-mode="${m}" onclick="setPRMode('${m}')">${modeLabel(m)}</button>`).join('')}
-    </div>
-    <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;padding:0 2px;">
+      <div id="pr-controls-balance" style="display:${prView === 'balance' ? 'block' : 'none'}">
+        <div class="pill-row" id="balance-base-pills">
+          ${BALANCE_MODES.map(b => `<button class="mode-pill${b.key === balanceBase ? ' active' : ''}" data-mode="${b.key}" onclick="setBalanceBase('${b.key}')">${b.key}</button>`).join('')}
+        </div>
+        <div id="balance-note">${buildBalanceNote()}</div>
+      </div>
+      <div id="pr-controls-best" style="display:${prView === 'best' ? 'block' : 'none'}">
+        <div class="pill-row" id="pr-mode-pills">
+          ${modes.map(m => `<button class="mode-pill${m === prMode ? ' active' : ''}" data-mode="${m}" onclick="setPRMode('${m}')">${modeLabel(m)}</button>`).join('')}
+        </div>
+    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;padding:0 2px;">
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--fresh);display:inline-block"></span>&lt; 2 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--aging);display:inline-block"></span>2–4 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--plateau);display:inline-block"></span>&gt; 4 weeks</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)"><span style="color:var(--aging)">★</span> last 7 days</div>
     </div>
-    <div id="pr-tables">${buildPRTables(data, prMode)}</div>
+      </div>
+    </div>
+    <div id="pr-view-balance" style="display:${prView === 'balance' ? 'block' : 'none'}">
+      <div id="balance-tables">${buildBalanceTables(data, balanceBase)}</div>
+    </div>
+    <div id="pr-view-best" style="display:${prView === 'best' ? 'block' : 'none'}">
+      <div id="pr-tables">${buildPRTables(data, prMode)}</div>
     </div>
   </div>`;
 }
@@ -820,6 +848,9 @@ function setPRView(view) {
   document.querySelectorAll('.view-toggle .pill').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   document.getElementById('pr-view-best').style.display = view === 'best' ? 'block' : 'none';
   document.getElementById('pr-view-balance').style.display = view === 'balance' ? 'block' : 'none';
+  document.getElementById('pr-controls-best').style.display = view === 'best' ? 'block' : 'none';
+  document.getElementById('pr-controls-balance').style.display = view === 'balance' ? 'block' : 'none';
+  window.scrollTo(0, 0);
 }
 
 function setPRMode(mode) {
@@ -832,6 +863,7 @@ function setPRMode(mode) {
 // are returned as spelled in the data.
 function groupMachines(available) {
   const lower = m => m.toLowerCase();
+  available = available.filter(isActiveMachine);
   const knownMachines = MACHINE_CATEGORIES.flatMap(c => c.machines).map(lower);
   return [
     ...MACHINE_CATEGORIES,
@@ -883,8 +915,7 @@ const BALANCE_MODES = [
   { key: 'Adaptive',   pct: 0.68, match: m => /adaptiv/i.test(m) },
   { key: 'Isokinetic', pct: 0.73, match: m => /isokinet/i.test(m) },
 ];
-const BALANCE_OK = 0.05;   // within ±5% of target counts as on track
-const BALANCE_WARN = 0.10; // ±5–10% is worth a look; beyond that is off
+const BALANCE_OK = 0.10; // within ±10% of target counts as on track; beyond that is off
 
 // machine → mode key → heaviest set of the latest session in that mode
 function balanceSnapshot(data) {
@@ -915,10 +946,15 @@ function balanceCell(entry, bm, base, baseEntry) {
     const target = baseEntry.weight / base.pct * bm.pct;
     const diff = entry.weight - target;
     const off = Math.abs(diff) / target;
-    const cls = off <= BALANCE_OK ? 'bal-ok' : off <= BALANCE_WARN ? 'bal-warn' : 'bal-off';
+    const cls = off <= BALANCE_OK ? 'bal-ok' : 'bal-off';
     sub = `<div class="bal-sub ${cls}">→ ${fmtKg(target)}</div>`;
   }
   return `<td><div class="pr-weight">${fmtKg(entry.weight)}</div>${sub}${date}</td>`;
+}
+
+function buildBalanceNote() {
+  const pcts = BALANCE_MODES.map(b => `${b.key} ${Math.round(b.pct * 100)}%`).join(', ');
+  return `<div class="bal-note">${pcts}. <span class="bal-ok">Green</span> within ±${BALANCE_OK * 100}%, <span class="bal-off">red</span> beyond.</div>`;
 }
 
 function buildBalanceTables(data, baseKey) {
@@ -947,10 +983,7 @@ function buildBalanceTables(data, baseKey) {
       </div>`;
   }).join('');
 
-  const pcts = BALANCE_MODES.map(b => `${b.key} ${Math.round(b.pct * 100)}%`).join(' · ');
-  const note = `<div class="bal-note">Targets assume your latest ${base.key} weight is ${Math.round(base.pct * 100)}% of max (${pcts}).
-    <span class="bal-ok">Green</span> within ±${BALANCE_OK * 100}%, <span class="bal-warn">amber</span> within ±${BALANCE_WARN * 100}%, <span class="bal-off">red</span> beyond.</div>`;
-  return note + (sections || `<div class="section" style="color:var(--muted);font-size:13px;">No Eccentric, Adaptive or Isokinetic sessions yet.</div>`);
+  return (sections || `<div class="section" style="color:var(--muted);font-size:13px;">No Eccentric, Adaptive or Isokinetic sessions yet.</div>`);
 }
 
 function setBalanceBase(key) {
