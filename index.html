@@ -915,7 +915,7 @@ const BALANCE_MODES = [
   { key: 'Adaptive',   pct: 0.68, match: m => /adaptiv/i.test(m) },
   { key: 'Isokinetic', pct: 0.73, match: m => /isokinet/i.test(m) },
 ];
-const BALANCE_OK = 0.10; // within ±10% of target counts as on track; beyond that is off
+const BALANCE_OK = 0.05; // within ±5% of target counts as on track; beyond that is off
 
 // machine → mode key → heaviest set of the latest session in that mode
 function balanceSnapshot(data) {
